@@ -1,0 +1,4 @@
+github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+github.com/sdifrance/gogrib2 v0.1.1 h1:06l35i/S3BWPXKjR6H1ETU6BNvfOmfEQZ6cYZAwgUBA=
+github.com/sdifrance/gogrib2 v0.1.1/go.mod h1:MfJpp7X/rOJ8oYiKyNVSXPMCNdT2avEqhHY+FoHK0Jw=
