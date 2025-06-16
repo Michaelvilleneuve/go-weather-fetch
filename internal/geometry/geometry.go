@@ -1,4 +1,4 @@
-package main
+package geometry
 
 import "math"
 
@@ -73,7 +73,7 @@ func filterPointsByRadius(points []GeoPoint, centerLat, centerLon, radiusKm floa
 	return filtered
 }
 
-func filterPointsByPolygon(points []GeoPoint, polygon []Point) []GeoPoint {
+func FilterPointsByPolygon(points []GeoPoint, polygon []Point) []GeoPoint {
 	var filtered []GeoPoint
 
 	for _, point := range points {

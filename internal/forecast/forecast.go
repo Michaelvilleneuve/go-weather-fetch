@@ -1,4 +1,4 @@
-package main
+package forecast
 
 import (
 	"fmt"
@@ -11,36 +11,42 @@ import (
 
 // Constants
 const (
-	FORECAST_HOURS = 3
+	FORECAST_HOURS = 2
 )
 
-func getAvailableDatetimes() []string {
-	availableDatetimes := []string{}
+func GetAvailableRunDates() []string {
+	availableRunDates := []string{}
 	now := time.Now()
 	currentHour := now.Hour()
+	yesterday := now.AddDate(0, 0, -1)
 
 	runs := []int{21, 18, 15, 12, 9, 5, 3, 0}
+	
+	// Add available runs from current day
 	for _, run := range runs {
 		if run <= currentHour {
-			availableDatetimes = append(availableDatetimes,
+			availableRunDates = append(availableRunDates,
 				now.Format("2006-01-02")+fmt.Sprintf("T%02d:00:00Z", run))
 		}
 	}
 
-	return availableDatetimes
+	// Add all runs from previous day
+	for _, run := range runs {
+		availableRunDates = append(availableRunDates,
+			yesterday.Format("2006-01-02")+fmt.Sprintf("T%02d:00:00Z", run))
+	}
+
+	return availableRunDates
 }
 
-func checkIfAllForecastsHoursAreAvailable(dt string) bool {
-	hours := make([]string, FORECAST_HOURS)
-	for i := 0; i < FORECAST_HOURS; i++ {
-		hours[i] = fmt.Sprintf("%02d", i)
-	}
+func CheckIfAllForecastsHoursAreAvailable(dt string) bool {
+	hours := GetAvailableHours(dt)
 
 	resultChans := make([]chan bool, len(hours))
 	for i, hour := range hours {
 		resultChans[i] = make(chan bool, 1)
 		go func(h string, ch chan bool) {
-			url := fmt.Sprintf("https://object.files.data.gouv.fr/meteofrance-pnt/pnt/%s/arome/001/HP1/arome__001__HP1__%sH__%s.grib2", dt, h, dt)
+			url := fmt.Sprintf("https://object.files.data.gouv.fr/meteofrance-pnt/pnt/%s/arome/001/SP2/arome__001__SP2__%sH__%s.grib2", dt, h, dt)
 			response, err := http.Head(url)
 			if err != nil {
 				ch <- false
@@ -61,8 +67,8 @@ func checkIfAllForecastsHoursAreAvailable(dt string) bool {
 	return allAvailable
 }
 
-func getSingleForecast(dt string, hour string) (string, error) {
-	url := fmt.Sprintf("https://object.files.data.gouv.fr/meteofrance-pnt/pnt/%s/arome/001/HP1/arome__001__HP1__%sH__%s.grib2", dt, hour, dt)
+func GetSingleForecast(dt string, hour string) (string, error) {
+	url := fmt.Sprintf("https://object.files.data.gouv.fr/meteofrance-pnt/pnt/%s/arome/001/SP2/arome__001__SP2__%sH__%s.grib2", dt, hour, dt)
 	log.Printf("Downloading %s", url)
 
 	response, err := http.Get(url)
@@ -91,11 +97,11 @@ func getSingleForecast(dt string, hour string) (string, error) {
 	return grib2file, nil
 }
 
-func availableHours() []string {
+func GetAvailableHours(dt string) []string {
 	hours := make([]string, FORECAST_HOURS)
 
 	for i := 0; i < FORECAST_HOURS; i++ {
-		hours[i] = fmt.Sprintf("%02d", i)
+		hours[i] = fmt.Sprintf("%02d", i + 45)
 	}
 
 	return hours
