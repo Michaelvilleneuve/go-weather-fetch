@@ -5,15 +5,16 @@ import (
 	"log"
 	"os"
 	"sync"
-	"github.com/joho/godotenv"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/forecast"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/grib"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/geometry"
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/api"
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
 )
 
 
 func main() {
-	loadEnv()
+	utils.LoadEnv()
 	availableDatetimes := forecast.GetAvailableRunDates()
 
 	for _, dt := range availableDatetimes {
@@ -43,7 +44,7 @@ func main() {
 
 		wg.Wait()
 
-		cleanUpFiles()
+		utils.CleanUpFiles()
 
 		os.Exit(0)
 	}
@@ -55,33 +56,13 @@ func processSingleForecast(dt string, hour string) (string, error) {
 		return "", err
 	}
 
-	fmt.Println("Extracting GRIB data...")
 	allPoints, err := grib.ExtractGribData(filename)
 	if err != nil {
 		log.Fatal("Error extracting GRIB data:", err)
 	}
 
-	fmt.Printf("Total points extracted: %d\n", len(allPoints))
+	pointsInPolygon := geometry.FilterPointsByPolygon(allPoints, geometry.POLYGON)
 
-	polygon := []geometry.Point{
-		{Lat: 39.7153328, Lon: 1.1861908},
-		{Lat: 39.7097536, Lon: 0.3860986},
-		{Lat: 39.7049828, Lon: -1.2260914},
-		{Lat: 37.8525431, Lon: -1.2438369},
-		{Lat: 37.8358186, Lon: 1.1625552},
-	}
-
-	fmt.Println("Filtering points within polygon...")
-	pointsInPolygon := geometry.FilterPointsByPolygon(allPoints, polygon)
-	fmt.Printf("Points within polygon: %d\n", len(pointsInPolygon))
-
-	// fmt.Println("\nSample of filtered points:")
-	// for i, point := range pointsInPolygon {
-	// 	fmt.Printf("Point %d: Lat=%.6f, Lon=%.6f, Value=%.6f\n",
-	// 		i+1, point.Lat, point.Lon, point.Value)
-	// }
-
-	// Array of array
 	allData := [][]float64{}
 
 	if len(pointsInPolygon) > 0 {
@@ -98,22 +79,4 @@ func processSingleForecast(dt string, hour string) (string, error) {
 	api.SendToApi(allData, hour, dt)
 
 	return "", nil
-}
-
-func cleanUpFiles() {
-	files, err := os.ReadDir("./tmp")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, file := range files {
-		os.Remove(file.Name())
-	}
-}
-
-func loadEnv() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
 }

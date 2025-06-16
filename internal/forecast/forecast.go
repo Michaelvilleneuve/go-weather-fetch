@@ -69,7 +69,7 @@ func CheckIfAllForecastsHoursAreAvailable(dt string) bool {
 
 func GetSingleForecast(dt string, hour string) (string, error) {
 	url := fmt.Sprintf("https://object.files.data.gouv.fr/meteofrance-pnt/pnt/%s/arome/001/SP2/arome__001__SP2__%sH__%s.grib2", dt, hour, dt)
-	log.Printf("Downloading %s", url)
+	fmt.Println("Downloading", url)
 
 	response, err := http.Get(url)
 	if err != nil {
@@ -85,8 +85,6 @@ func GetSingleForecast(dt string, hour string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	log.Printf("Downloaded %d bytes", len(body))
 
 	grib2file := fmt.Sprintf("./tmp/file_%s_%s.grib2", dt, hour)
 	err = os.WriteFile(grib2file, body, 0644)

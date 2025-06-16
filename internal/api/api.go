@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"net/http"
 	"time"
-	"github.com/joho/godotenv"
 )
 
 

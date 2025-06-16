@@ -163,8 +163,6 @@ func extractGribDataFromHandle(handle *C.codes_handle) ([]geometry.GeoPoint, err
 	errCode := C.codes_get_long(handle, C.CString("numberOfPoints"), &numberOfPoints)
 	checkErr("getting numberOfPoints", errCode)
 
-	fmt.Printf("Number of points in this message: %d\n", numberOfPoints)
-
 	var err C.int
 	iter := C.codes_grib_iterator_new(handle, 0, &err)
 	if iter == nil {

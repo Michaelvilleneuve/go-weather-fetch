@@ -7,6 +7,14 @@ const (
 	EARTH_RADIUS_KM = 6371 // Earth radius in kilometers
 )
 
+var POLYGON = []Point{
+	{Lat: 39.7153328, Lon: 1.1861908},
+	{Lat: 39.7097536, Lon: 0.3860986},
+	{Lat: 39.7049828, Lon: -1.2260914},
+	{Lat: 37.8525431, Lon: -1.2438369},
+	{Lat: 37.8358186, Lon: 1.1625552},
+}
+
 type GeoPoint struct {
 	Lat   float64
 	Lon   float64
