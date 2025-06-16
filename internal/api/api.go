@@ -7,6 +7,7 @@ import (
 	"os"
 	"net/http"
 	"time"
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
 )
 
 
@@ -45,7 +46,10 @@ func SendToApi(data [][]float64, hour string, original_time string) (string, err
 		}
 
 		if resp.StatusCode == 201 {
+			utils.Log("Hour " + hour + " sent to API")
 			return "", nil
+		} else {
+			utils.Log("Error sending hour " + hour + " to API")
 		}
 
 		if i < 2 {

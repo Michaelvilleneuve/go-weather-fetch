@@ -3,7 +3,7 @@ package utils
 import (
 	"log"
 	"os"
-
+	"fmt"
 	"github.com/joho/godotenv"
 )
 
@@ -20,8 +20,14 @@ func CleanUpFiles() {
 }
 
 func LoadEnv() {
-	err := godotenv.Load()
+	err := godotenv.Load(".env")
 	if err != nil {
 		log.Fatal("Error loading .env file")
+	}
+}
+
+func Log(message string) {
+	if os.Getenv("DEBUG") == "true" {
+		fmt.Println(message)
 	}
 }

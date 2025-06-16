@@ -3,10 +3,10 @@ package forecast
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"time"
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
 )
 
 // Constants
@@ -69,7 +69,7 @@ func CheckIfAllForecastsHoursAreAvailable(dt string) bool {
 
 func GetSingleForecast(dt string, hour string) (string, error) {
 	url := fmt.Sprintf("https://object.files.data.gouv.fr/meteofrance-pnt/pnt/%s/arome/001/SP2/arome__001__SP2__%sH__%s.grib2", dt, hour, dt)
-	fmt.Println("Downloading", url)
+	utils.Log("Downloading " + url)
 
 	response, err := http.Get(url)
 	if err != nil {

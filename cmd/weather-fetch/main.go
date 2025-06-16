@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"log"
 	"os"
 	"sync"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/forecast"
@@ -20,14 +18,15 @@ func main() {
 	for _, dt := range availableDatetimes {
 
 		if !forecast.CheckIfAllForecastsHoursAreAvailable(dt) {
-			fmt.Printf("No forecast yet for %s\n", dt)
 			continue
 		}
+
+		utils.Log("Forecast found for " + dt)
 
 		err := os.WriteFile("last_download.txt", []byte(dt), 0644)
 
 		if err != nil {
-			fmt.Printf("Error writing last_download.txt: %v\n", err)
+			utils.Log("Error writing last_download.txt: " + err.Error())
 		}
 
 		var (
@@ -58,7 +57,8 @@ func processSingleForecast(dt string, hour string) (string, error) {
 
 	allPoints, err := grib.ExtractGribData(filename)
 	if err != nil {
-		log.Fatal("Error extracting GRIB data:", err)
+		utils.Log("Error extracting GRIB data: " + err.Error())
+		return "", err
 	}
 
 	pointsInPolygon := geometry.FilterPointsByPolygon(allPoints, geometry.POLYGON)
