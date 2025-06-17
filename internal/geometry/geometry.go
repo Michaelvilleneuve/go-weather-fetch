@@ -2,9 +2,8 @@ package geometry
 
 import "math"
 
-// Constants
 const (
-	EARTH_RADIUS_KM = 6371 // Earth radius in kilometers
+	EARTH_RADIUS_KM = 6371
 )
 
 var POLYGON = []Point{
