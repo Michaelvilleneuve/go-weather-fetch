@@ -2,6 +2,13 @@
 
 A Go application that fetches weather forecast data from Météo-France in GRIB2 format, processes it using the eccodes library, and filters geographical data points within a specified polygon region.
 
+This data is then used in https://lesveusdelavall.org to display a 3D map of highly precised rainfall accumulation map. 
+
+<img width="1512" alt="screenshot overall view" src="https://github.com/user-attachments/assets/019adc4f-ce44-4022-a217-b405736a9fd1" />
+
+<img width="1511" alt="screenshot 3D closeup" src="https://github.com/user-attachments/assets/57cd00f9-5a4e-4bb7-b787-48d87e3d0378" />
+
+
 ## Features
 
 - Downloads AROME weather forecast data from Météo-France
