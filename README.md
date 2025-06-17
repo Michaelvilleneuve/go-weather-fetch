@@ -9,6 +9,7 @@ A Go application that fetches weather forecast data from Météo-France in GRIB2
 - Filters data points within a defined geographical polygon
 - Concurrent processing of multiple forecast hours
 - Statistical analysis of filtered data points
+- Serves the data as a JSON file
 
 ## Prerequisites
 

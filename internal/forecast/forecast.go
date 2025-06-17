@@ -5,13 +5,18 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"math"
+	"sync"
 	"time"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/grib"
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/geometry"
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/storage"
 )
 
 // Constants
 const (
-	FORECAST_HOURS = 2
+	FORECAST_HOURS = 51
 )
 
 func GetAvailableRunDates() []string {
@@ -20,7 +25,7 @@ func GetAvailableRunDates() []string {
 	currentHour := now.Hour()
 	yesterday := now.AddDate(0, 0, -1)
 
-	runs := []int{21, 18, 15, 12, 9, 5, 3, 0}
+	runs := []int{21, 18, 15, 12, 9, 6, 3, 0}
 	
 	// Add available runs from current day
 	for _, run := range runs {
@@ -30,7 +35,7 @@ func GetAvailableRunDates() []string {
 		}
 	}
 
-	// Add all runs from previous day
+	// Add all runs from previous day (in early morning only runs from past day are available)
 	for _, run := range runs {
 		availableRunDates = append(availableRunDates,
 			yesterday.Format("2006-01-02")+fmt.Sprintf("T%02d:00:00Z", run))
@@ -99,8 +104,81 @@ func GetAvailableHours(dt string) []string {
 	hours := make([]string, FORECAST_HOURS)
 
 	for i := 0; i < FORECAST_HOURS; i++ {
-		hours[i] = fmt.Sprintf("%02d", i + 45)
+		hours[i] = fmt.Sprintf("%02d", i + 1)
 	}
 
 	return hours
+}
+
+func ProcessSingleForecast(dt string, hour string) (string, error) {
+	filename, err := GetSingleForecast(dt, hour)
+	if err != nil {
+		return "", err
+	}
+
+	allPoints, err := grib.ExtractGribData(filename)
+	if err != nil {
+		utils.Log("Error extracting GRIB data: " + err.Error())
+		return "", err
+	}
+
+	pointsInPolygon := geometry.FilterPointsByPolygon(allPoints, geometry.POLYGON)
+
+	allData := [][]float64{}
+
+	if len(pointsInPolygon) > 0 {
+		for _, point := range pointsInPolygon {
+			value := 0.0
+			if point.Value < 9999 {
+				value = point.Value
+			}
+
+			allData = append(allData, []float64{math.Round(point.Lon*1000)/1000, math.Round(point.Lat*1000)/1000, math.Round(value*100)/100})
+		}
+	}
+
+	storage.Save(allData, hour, dt)
+
+	return "", nil
+}
+
+func StartFetching() {
+	availableRuns := GetAvailableRunDates()
+
+	for _, run := range availableRuns {
+
+		if !CheckIfAllForecastsHoursAreAvailable(run) {
+			continue
+		}
+
+		if storage.IsUpToDate(run) {
+			utils.Log("Forecast already downloaded, skipping " + run)
+			// Retry in 10 seconds
+			time.Sleep(10 * time.Second)
+			break
+		}
+
+		utils.Log("Forecast found for " + run)
+
+		var (
+			wg sync.WaitGroup
+		)
+
+		for _, hour := range GetAvailableHours(run) {
+			wg.Add(1)
+			go func(h string) {
+				defer wg.Done()
+				ProcessSingleForecast(run, h)
+			}(hour)
+		}
+
+		wg.Wait()
+
+		storage.RollOut()
+		utils.CleanUpFiles()
+
+		break
+	}
+
+	StartFetching()	
 }

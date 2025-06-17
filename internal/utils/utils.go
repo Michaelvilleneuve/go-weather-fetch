@@ -15,7 +15,7 @@ func CleanUpFiles() {
 	}
 
 	for _, file := range files {
-		os.Remove(file.Name())
+		os.Remove("./tmp/" + file.Name())
 	}
 }
 
