@@ -5,3 +5,4 @@ tmp/*
 last_download.txt
 storage/*
 !storage/.keep
+.kamal/

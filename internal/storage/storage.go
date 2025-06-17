@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"fmt"
 	"os"
+	"io"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
 )
 
@@ -54,15 +55,46 @@ func RollOut() {
 
 	for _, src := range files {
 		dst := filepath.Join("storage", filepath.Base(src))
-		err := os.Rename(src, dst)
+		err := moveFile(src, dst)
 		if err != nil {
 			utils.Log("Error moving file " + src + ": " + err.Error())
 		}
 	}
 
 	// Move the current_run_datetime.txt file
-	err = os.Rename("tmp/current_run_datetime.txt", "storage/current_run_datetime.txt")
+	err = moveFile("tmp/current_run_datetime.txt", "storage/current_run_datetime.txt")
 	if err != nil {
 		utils.Log("Error moving current_run_datetime.txt: " + err.Error())
 	}
+}
+
+func moveFile(src, dst string) error {
+	err := os.Rename(src, dst)
+	if err == nil {
+		return nil
+	}
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return err
+	}
+
+	err = dstFile.Sync()
+	if err != nil {
+		return err
+	}
+
+	return os.Remove(src)
 }
