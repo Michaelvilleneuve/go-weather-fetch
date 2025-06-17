@@ -13,7 +13,7 @@ This data is then used in https://lesveusdelavall.org to display a 3D map of hig
 
 - Downloads AROME weather forecast data from Météo-France
 - Processes GRIB2 files using the eccodes C library
-- Filters data points within a defined geographical polygon
+- Filters data points within a defined geographical polygon corresponding more or less to the Communidad Valenciana (Spain)
 - Concurrent processing of multiple forecast hours
 - Statistical analysis of filtered data points
 - Serves the data as a JSON file
@@ -22,11 +22,15 @@ This data is then used in https://lesveusdelavall.org to display a 3D map of hig
 
 ### System Requirements
 
+If you want to run this locally, you need to have the following:
+
 - Go 1.24.3 or later
 - eccodes library (ECMWF's library for reading/writing GRIB files)
 - pkg-config
 
-### Installing eccodes Library
+Or you can just use the docker if you don't want to install the dependencies
+
+### Dockerless install prerequisites
 
 The eccodes library is required for parsing GRIB files. Installation varies by operating system:
 
@@ -52,24 +56,21 @@ git clone https://github.com/Michaelvilleneuve/weather-fetch-go.git
 cd weather-fetch-go
 ```
 
-2. Create the temporary directory:
-```bash
-mkdir -p tmp
-```
-
-3. Install Go dependencies:
+2. Install Go dependencies:
 ```bash
 go mod download
 ```
 
-4. Build the application:
+3. Run the application:
 ```bash
-go build -o weather-fetch-go
+go run cmd/weather-fetch/main.go
 ```
 
-## Usage
+### Deployment
 
-Run the application:
+This app is deployed to production using Kamal:
 ```bash
-./weather-fetch-go
+kamal deploy
 ```
+
+This will deployed to `weather.lesveusdelavall.org` with SSL auto generated

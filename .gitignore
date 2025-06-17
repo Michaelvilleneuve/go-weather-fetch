@@ -1,8 +1,9 @@
 weather-fetch-go
-tmp/*
 .DS_Store
 .env
 last_download.txt
 storage/*
 !storage/.keep
+tmp/*
+!tmp/.keep
 .kamal/
