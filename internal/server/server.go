@@ -21,12 +21,18 @@ func Serve() {
 			hour = "0" + hour
 		}
 
-
 		w.Header().Set("Content-Type", "application/json"	)
 		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS, HEAD")
+
 		w.WriteHeader(http.StatusOK)
 
 		http.ServeFile(w, r, "storage/rainfall_" + hour + ".json.gz")
+	})
+
+	http.HandleFunc("/up", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ha ha ha ha staying alive"))
 	})
 
 	utils.Log("Serving forecast on port " + os.Getenv("PORT"))

@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Temporary files
+tmp/*
+!tmp/.gitkeep
+
+# Storage files (these are generated at runtime)
+storage/*
+!storage/.gitkeep
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+weather-fetch-go
+*.exe
+
+# Docker files
+Dockerfile*
+docker-compose*
+.dockerignore 
