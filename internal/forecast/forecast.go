@@ -153,8 +153,7 @@ func StartFetching() {
 
 		if storage.IsUpToDate(run) {
 			utils.Log("Forecast already downloaded, skipping " + run)
-			// Retry in 10 seconds
-			time.Sleep(10 * time.Second)
+			time.Sleep(60 * time.Second)
 			break
 		}
 
