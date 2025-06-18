@@ -2,17 +2,49 @@ package storage
 
 import (
 	"bytes"
-	"encoding/json"
 	"compress/gzip"
-	"path/filepath"
+	"encoding/json"
 	"fmt"
-	"os"
 	"io"
+	"log"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"syscall"
+
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
 )
 
 
-func Save(data [][]float64, hour string, original_time string) (string, error) {
+func AnticipateExit() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		utils.Log("Cleaning up before exit...")
+		CleanUpFiles("")
+		os.Exit(0)
+	}()
+}
+
+
+func CleanUpFiles(pattern string) {
+	files, err := os.ReadDir("./tmp")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, file := range files {
+		if len(pattern) > 0 && !strings.Contains(file.Name(), pattern) {
+			continue
+		}
+		os.Remove("./tmp/" + file.Name())
+	}
+}
+
+
+func Save(data [][]float64, packageName string, hour string, original_time string) (string, error) {
 	payload := map[string]interface{}{
 		"data": data,
 		"hour": hour,
@@ -29,43 +61,49 @@ func Save(data [][]float64, hour string, original_time string) (string, error) {
 	gz.Write(jsonPayload)
 	gz.Close()
 
-	os.WriteFile(fmt.Sprintf("tmp/rainfall_%s.json.gz", hour), buf.Bytes(), 0644)
+	os.WriteFile(fmt.Sprintf("tmp/%s_%s.json.gz", packageName, hour), buf.Bytes(), 0644)
 
 	return "", nil
 }
 
-func IsUpToDate(dt string) bool {
-	lastDownloaded, err := os.ReadFile("storage/current_run_datetime.txt")
+func IsUpToDate(packageName string, dt string) bool {
+	lastDownloaded, err := os.ReadFile(fmt.Sprintf("storage/%s_current_run_datetime.txt", packageName))
 	isUpToDate := bytes.Equal(lastDownloaded, []byte(dt))
 
 	if err != nil || !isUpToDate {
-		os.WriteFile("tmp/current_run_datetime.txt", []byte(dt), 0644)
+		os.WriteFile(fmt.Sprintf("tmp/%s_current_run_datetime.txt", packageName), []byte(dt), 0644)
 		return false
 	}
 
 	return isUpToDate
 }
 
-func RollOut() {
-	files, err := filepath.Glob("tmp/rainfall_*.json.gz")
-	if err != nil {
-		utils.Log("Error during globbing: " + err.Error())
-		return
-	}
-
-	for _, src := range files {
-		dst := filepath.Join("storage", filepath.Base(src))
-		err := moveFile(src, dst)
+func RollOut(packageName string, commonNames []string) {
+	for _, commonName := range commonNames {
+		files, err := filepath.Glob(fmt.Sprintf("tmp/%s_*.json.gz", commonName))
 		if err != nil {
-			utils.Log("Error moving file " + src + ": " + err.Error())
+			utils.Log("Error during globbing: " + err.Error())
+			return
 		}
+
+		for _, src := range files {
+			dst := filepath.Join("storage", filepath.Base(src))
+			err := moveFile(src, dst)
+			if err != nil {
+				utils.Log("Error moving file " + src + ": " + err.Error())
+			}
+		}
+
 	}
 
+	
 	// Move the current_run_datetime.txt file
-	err = moveFile("tmp/current_run_datetime.txt", "storage/current_run_datetime.txt")
+	err := moveFile(fmt.Sprintf("tmp/%s_current_run_datetime.txt", packageName), fmt.Sprintf("storage/%s_current_run_datetime.txt", packageName))
 	if err != nil {
-		utils.Log("Error moving current_run_datetime.txt: " + err.Error())
+		utils.Log("Error moving file " + fmt.Sprintf("tmp/%s_current_run_datetime.txt", packageName) + ": " + err.Error())
 	}
+
+	CleanUpFiles(packageName)
 }
 
 func moveFile(src, dst string) error {

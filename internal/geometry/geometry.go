@@ -25,21 +25,7 @@ type Point struct {
 	Lon float64
 }
 
-func haversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
-	lat1Rad := lat1 * math.Pi / 180
-	lat2Rad := lat2 * math.Pi / 180
-	deltaLat := (lat2 - lat1) * math.Pi / 180
-	deltaLon := (lon2 - lon1) * math.Pi / 180
-
-	a := math.Sin(deltaLat/2)*math.Sin(deltaLat/2) +
-		math.Cos(lat1Rad)*math.Cos(lat2Rad)*
-			math.Sin(deltaLon/2)*math.Sin(deltaLon/2)
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-
-	return EARTH_RADIUS_KM * c
-} 
-
-func isPointInPolygon(point Point, polygon []Point) bool {
+func IsPointInPolygon(point Point, polygon []Point) bool {
 	x, y := point.Lon, point.Lat
 	n := len(polygon)
 	inside := false
@@ -66,25 +52,11 @@ func isPointInPolygon(point Point, polygon []Point) bool {
 	return inside
 }
 
-
-func filterPointsByRadius(points []GeoPoint, centerLat, centerLon, radiusKm float64) []GeoPoint {
-	var filtered []GeoPoint
-
-	for _, point := range points {
-		distance := haversineDistance(centerLat, centerLon, point.Lat, point.Lon)
-		if distance <= radiusKm {
-			filtered = append(filtered, point)
-		}
-	}
-
-	return filtered
-}
-
 func FilterPointsByPolygon(points []GeoPoint, polygon []Point) []GeoPoint {
 	var filtered []GeoPoint
 
 	for _, point := range points {
-		if isPointInPolygon(Point{Lat: point.Lat, Lon: point.Lon}, polygon) {
+		if IsPointInPolygon(Point{Lat: point.Lat, Lon: point.Lon}, polygon) {
 			filtered = append(filtered, point)
 		}
 	}

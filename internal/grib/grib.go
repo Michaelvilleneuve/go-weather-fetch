@@ -12,8 +12,8 @@ import (
 	"log"
 	"os"
 	"strings"
-	"time"
 	"unsafe"
+
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/geometry"
 )
 
@@ -24,7 +24,7 @@ func checkErr(msg string, err C.int) {
 	}
 }
 
-func ExtractGribData(filename string) ([]geometry.GeoPoint, error) {
+func ExtractGribData(filename string, fields []string) (map[string][]geometry.GeoPoint, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Fatal(err)
@@ -43,11 +43,15 @@ func ExtractGribData(filename string) ([]geometry.GeoPoint, error) {
 	}
 
 	// Process all messages in the GRIB file
-	return extractAllMessages(buf)
+	return extractAllMessages(buf, fields)
 }
 
-func extractAllMessages(buf []byte) ([]geometry.GeoPoint, error) {
-	var allPoints []geometry.GeoPoint
+func extractAllMessages(buf []byte, fields []string) (map[string][]geometry.GeoPoint, error) {
+	pointsByField := make(map[string][]geometry.GeoPoint)
+	for _, field := range fields {
+		pointsByField[field] = []geometry.GeoPoint{}
+	}
+
 	offset := 0
 	messageCount := 0
 	
@@ -65,17 +69,17 @@ func extractAllMessages(buf []byte) ([]geometry.GeoPoint, error) {
 		
 		messageCount++
 		
-		// Check if this message matches our criteria
-		if shouldProcessMessage(handle) {
-			points, err := extractGribDataFromHandle(handle)
+		for _, field := range fields {
+			if shouldProcessMessage(handle, field) {
+			points, err := extractGribDataFromHandle(handle, field)
 			if err != nil {
 				C.codes_handle_delete(handle)
 				return nil, err
 			}
-			allPoints = append(allPoints, points...)
+				pointsByField[field] = append(pointsByField[field], points...)
+			}
 		}
 		
-		// Move to next message
 		var messageSize C.long
 		errCode = C.codes_get_long(handle, C.CString("totalLength"), &messageSize)
 		C.codes_handle_delete(handle)
@@ -87,11 +91,10 @@ func extractAllMessages(buf []byte) ([]geometry.GeoPoint, error) {
 		offset += int(messageSize)
 	}
 	
-	return allPoints, nil
+	return pointsByField, nil
 }
 
-func shouldProcessMessage(handle *C.codes_handle) bool {
-	// Helper function to get string parameter
+func shouldProcessMessage(handle *C.codes_handle, field string) bool {
 	getString := func(key string) string {
 		var sLen C.size_t = 64
 		s := (*C.char)(C.malloc(sLen))
@@ -104,61 +107,21 @@ func shouldProcessMessage(handle *C.codes_handle) bool {
 		return ""
 	}
 	
-	// Check for variable='tirf' or related thermal infrared variables
 	variableKeys := []string{"shortName", "paramId", "variable", "cfVarName", "name"}
 	variableFound := false
 	
 	for _, key := range variableKeys {
 		value := getString(key)
-		// Check for exact match or related thermal infrared terms
-		if strings.Contains(strings.ToLower(value), "tirf") {
+		if strings.Contains(strings.ToLower(value), field) {
 			variableFound = true
 			break
 		}
 	}
 	
-	// Only process messages that contain 'tirf' specifically
-	if variableFound {
-		// Don't process all messages, only look for tirf
-		return true
-	}
-
-	return false
+	return variableFound
 }
 
-func listGribParameters(handle *C.codes_handle) {
-	fmt.Println("Available GRIB parameters:")
-	
-	// Common parameters to check
-	parameters := []string{
-		"shortName", "name", "units", "paramId", "centre", "subCentre",
-		"generatingProcessIdentifier", "typeOfLevel", "level", "package",
-		"paquet", "productDefinitionTemplateNumber", "cfVarName", "variable",
-		"discipline", "parameterCategory", "parameterNumber",
-	}
-	
-	for _, param := range parameters {
-		var sLen C.size_t = 256
-		s := (*C.char)(C.malloc(sLen))
-		defer C.free(unsafe.Pointer(s))
-		
-		errCode := C.codes_get_string(handle, C.CString(param), s, &sLen)
-		if errCode == 0 {
-			value := C.GoStringN(s, C.int(sLen))
-			fmt.Printf("  %s: %s\n", param, value)
-		} else {
-			// Try as long integer
-			var longVal C.long
-			errCode = C.codes_get_long(handle, C.CString(param), &longVal)
-			if errCode == 0 {
-				fmt.Printf("  %s: %d\n", param, longVal)
-			}
-		}
-	}
-	fmt.Println("---")
-}
-
-func extractGribDataFromHandle(handle *C.codes_handle) ([]geometry.GeoPoint, error) {
+func extractGribDataFromHandle(handle *C.codes_handle, field string) ([]geometry.GeoPoint, error) {
 	var numberOfPoints C.long
 	errCode := C.codes_get_long(handle, C.CString("numberOfPoints"), &numberOfPoints)
 	checkErr("getting numberOfPoints", errCode)
@@ -182,33 +145,4 @@ func extractGribDataFromHandle(handle *C.codes_handle) ([]geometry.GeoPoint, err
 	}
 
 	return points, nil
-}
-
-func getTimestamp(handle *C.codes_handle) (time.Time, error) {
-	var year, month, day, hour, minute, second C.long
-
-	errCode := C.codes_get_long(handle, C.CString("year"), &year)
-	checkErr("getting year", errCode)
-
-	errCode = C.codes_get_long(handle, C.CString("month"), &month)
-	checkErr("getting month", errCode)
-
-	errCode = C.codes_get_long(handle, C.CString("day"), &day)
-	checkErr("getting day", errCode)
-
-	errCode = C.codes_get_long(handle, C.CString("hour"), &hour)
-	checkErr("getting hour", errCode)
-
-	errCode = C.codes_get_long(handle, C.CString("minute"), &minute)
-	checkErr("getting minute", errCode)
-
-	errCode = C.codes_get_long(handle, C.CString("second"), &second)
-	if errCode != 0 {
-		second = 0
-	}
-
-	timestamp := time.Date(int(year), time.Month(month), int(day),
-		int(hour), int(minute), int(second), 0, time.UTC)
-
-	return timestamp, nil
 }

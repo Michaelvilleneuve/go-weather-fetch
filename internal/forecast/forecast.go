@@ -3,23 +3,219 @@ package forecast
 import (
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
-	"math"
 	"sync"
 	"time"
-	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
-	"github.com/Michaelvilleneuve/weather-fetch-go/internal/grib"
+
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/geometry"
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/grib"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/storage"
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
 )
 
-// Constants
+type ForecastGroup struct {
+	CommonName string
+	Fields []string
+}
+
+type ForecastPackage struct {
+	Package string
+	Forecasts []ForecastGroup
+}
+
 const (
-	FORECAST_HOURS = 51
+	FORECAST_HOURS = 10
 )
 
-func GetAvailableRunDates() []string {
+var FORECAST_PACKAGES = []ForecastPackage{
+	{
+		Package: "SP2",
+		Forecasts: []ForecastGroup{
+			// {CommonName: "rainfall_accumulation", Fields: []string{"tirf"}},
+			{CommonName: "cloud_cover", Fields: []string{"lcc", "mcc", "hcc"}},
+		},
+	},
+	{
+		Package: "SP1",
+		Forecasts: []ForecastGroup{
+			// {CommonName: "humidity", Fields: []string{"r2"}},
+			// {CommonName: "temperature", Fields: []string{"t2m"}},
+		},
+	},
+}
+
+func StartFetching() {
+	var wg sync.WaitGroup
+	
+	for _, forecastPackage := range FORECAST_PACKAGES {
+		wg.Add(1)
+		go func(fp ForecastPackage) {
+			defer wg.Done()
+			processForecastPackage(fp)
+		}(forecastPackage)
+	}
+	
+	wg.Wait()
+
+	StartFetching()
+}
+
+// Package is like SP1 or SP2 from méteo-france
+// Each package is stored in a separate folder in data.gouv.fr
+// So we download every hour of every package
+func processForecastPackage(forecastPackage ForecastPackage) {
+	run := getLatestCompleteRun(forecastPackage)
+
+	if storage.IsUpToDate(forecastPackage.Package, run) {
+		utils.Log("Forecast already downloaded, skipping " + run)
+		time.Sleep(60 * time.Second)
+		return
+	}
+
+	utils.Log("Forecast found for package " + forecastPackage.Package + " run: " + run)
+
+	// Process each hour from 1 to 51
+	for _, hour := range getAvailableHours() {
+		filename, err := downloadPackage(forecastPackage.Package, run, hour)
+		if err != nil {
+			utils.Log("Error getting single forecast: " + err.Error())
+			return
+		}
+
+		utils.Log("Forecast retrieved for " + run + " " + hour)
+
+		// Now we process each param (temperature, humidity) of a given package
+		processForecastGroup(filename, forecastPackage, run, hour)
+	}
+
+	// Extract common names from forecast groups
+	commonNames := make([]string, len(forecastPackage.Forecasts))
+	for i, fg := range forecastPackage.Forecasts {
+		commonNames[i] = fg.CommonName
+	}
+	
+	storage.RollOut(forecastPackage.Package, commonNames)
+}
+
+func processForecastGroup(filename string, forecastPackage ForecastPackage, run string, hour string) {
+	for _, forecastGroup := range forecastPackage.Forecasts {
+		ProcessSingleForecast(filename, forecastGroup.CommonName, forecastGroup.Fields, run, hour)
+	}
+}
+
+func ProcessSingleForecast(filename string, commonName string, fields []string, dt string, hour string) (string, error) {
+	pointsByField, err := grib.ExtractGribData(filename, fields)
+	if err != nil {
+		utils.Log("Error extracting GRIB data: " + err.Error())
+		return "", err
+	}
+
+	// Aggregate points by coordinates
+	coordinateMap := make(map[string]geometry.GeoPoint)
+
+	if commonName == "cloud_cover" {
+		// Special handling for cloud cover: tcc = lcc + mcc * (1 - lcc) + hcc * (1 - lcc) * (1 - mcc)
+		cloudDataMap := make(map[string]map[string]float64)
+		
+		for fieldName, points := range pointsByField {
+			for _, point := range points {
+				if !geometry.IsPointInPolygon(geometry.Point{Lat: point.Lat, Lon: point.Lon}, geometry.POLYGON) {
+					continue
+				}
+				coordKey := fmt.Sprintf("%.3f,%.3f", math.Round(point.Lon*1000)/1000, math.Round(point.Lat*1000)/1000)
+				
+				if cloudDataMap[coordKey] == nil {
+					cloudDataMap[coordKey] = make(map[string]float64)
+				}
+				
+				value := 0.0
+				if point.Value < 9999 {
+					// Convert from percentage (0-100) to fraction (0-1) if needed
+					// AROME cloud cover values are typically in percentage format
+					value = point.Value
+					if value > 1.0 {
+						value = value / 100.0 // Convert percentage to fraction
+					}
+				}
+				cloudDataMap[coordKey][fieldName] = value
+			}
+		}
+		
+		// Calculate total cloud cover using the formula
+		for coordKey, cloudData := range cloudDataMap {
+			lcc := cloudData["lcc"]
+			mcc := cloudData["mcc"] 
+			hcc := cloudData["hcc"]
+			
+			// Ensure values are in valid range [0,1]
+			lcc = math.Max(0, math.Min(1, lcc))
+			mcc = math.Max(0, math.Min(1, mcc))
+			hcc = math.Max(0, math.Min(1, hcc))
+			
+			// Apply the total cloud cover formula (result is fraction 0-1)
+			tcc := lcc + mcc*(1-lcc) + hcc*(1-lcc)*(1-mcc)
+			
+			// Ensure result is in valid range and convert back to percentage for consistency
+			tcc = math.Max(0, math.Min(1, tcc)) * 100.0
+			
+			// Parse coordinates from key
+			var lon, lat float64
+			fmt.Sscanf(coordKey, "%f,%f", &lon, &lat)
+			
+			coordinateMap[coordKey] = geometry.GeoPoint{
+				Lat:   lat,
+				Lon:   lon,
+				Value: tcc,
+			}
+		}
+	} else {
+		// Default behavior: sum values from all fields
+		for _, points := range pointsByField {
+			
+			for _, point := range points {
+				if !geometry.IsPointInPolygon(geometry.Point{Lat: point.Lat, Lon: point.Lon}, geometry.POLYGON) {
+					continue
+				}
+				// Create a key from rounded coordinates for grouping
+				coordKey := fmt.Sprintf("%.3f,%.3f", math.Round(point.Lon*1000)/1000, math.Round(point.Lat*1000)/1000)
+				
+				if existingPoint, exists := coordinateMap[coordKey]; exists {
+					// Sum the values if coordinate already exists
+					value := 0.0
+					if point.Value < 9999 {
+						value = point.Value
+					}
+					existingPoint.Value += value
+					coordinateMap[coordKey] = existingPoint
+				} else {
+					// Create new point entry
+					value := 0.0
+					if point.Value < 9999 {
+						value = point.Value
+					}
+					coordinateMap[coordKey] = geometry.GeoPoint{
+						Lat:   math.Round(point.Lat*1000)/1000,
+						Lon:   math.Round(point.Lon*1000)/1000,
+						Value: value,
+					}
+				}
+			}
+		}
+	}
+	
+	allData := [][]float64{}
+	for _, point := range coordinateMap {
+		allData = append(allData, []float64{point.Lon, point.Lat, math.Round(point.Value*100)/100})
+	}
+
+	storage.Save(allData, commonName, hour, dt)
+
+	return "", nil
+}
+
+func getAvailableRunDates() []string {
 	availableRunDates := []string{}
 	now := time.Now()
 	currentHour := now.Hour()
@@ -44,14 +240,14 @@ func GetAvailableRunDates() []string {
 	return availableRunDates
 }
 
-func CheckIfAllForecastsHoursAreAvailable(dt string) bool {
-	hours := GetAvailableHours(dt)
+func allForecastsHoursAreAvailable(packageName string, dt string) bool {
+	hours := getAvailableHours()
 
 	resultChans := make([]chan bool, len(hours))
 	for i, hour := range hours {
 		resultChans[i] = make(chan bool, 1)
 		go func(h string, ch chan bool) {
-			url := fmt.Sprintf("https://object.files.data.gouv.fr/meteofrance-pnt/pnt/%s/arome/001/SP2/arome__001__SP2__%sH__%s.grib2", dt, h, dt)
+			url := fmt.Sprintf("https://object.files.data.gouv.fr/meteofrance-pnt/pnt/%s/arome/001/%s/arome__001__%s__%sH__%s.grib2", dt, packageName, packageName, h, dt)
 			response, err := http.Head(url)
 			if err != nil {
 				ch <- false
@@ -72,8 +268,8 @@ func CheckIfAllForecastsHoursAreAvailable(dt string) bool {
 	return allAvailable
 }
 
-func GetSingleForecast(dt string, hour string) (string, error) {
-	url := fmt.Sprintf("https://object.files.data.gouv.fr/meteofrance-pnt/pnt/%s/arome/001/SP2/arome__001__SP2__%sH__%s.grib2", dt, hour, dt)
+func downloadPackage(packageName string, dt string, hour string) (string, error) {
+	url := fmt.Sprintf("https://object.files.data.gouv.fr/meteofrance-pnt/pnt/%s/arome/001/%s/arome__001__%s__%sH__%s.grib2", dt, packageName, packageName, hour, dt)
 	utils.Log("Downloading " + url)
 
 	response, err := http.Get(url)
@@ -91,7 +287,7 @@ func GetSingleForecast(dt string, hour string) (string, error) {
 		return "", err
 	}
 
-	grib2file := fmt.Sprintf("./tmp/file_%s_%s.grib2", dt, hour)
+	grib2file := fmt.Sprintf("./tmp/file_%s_%s_%s.grib2", packageName, dt, hour)
 	err = os.WriteFile(grib2file, body, 0644)
 	if err != nil {
 		return "", err
@@ -100,7 +296,7 @@ func GetSingleForecast(dt string, hour string) (string, error) {
 	return grib2file, nil
 }
 
-func GetAvailableHours(dt string) []string {
+func getAvailableHours() []string {
 	hours := make([]string, FORECAST_HOURS)
 
 	for i := 0; i < FORECAST_HOURS; i++ {
@@ -110,74 +306,16 @@ func GetAvailableHours(dt string) []string {
 	return hours
 }
 
-func ProcessSingleForecast(dt string, hour string) (string, error) {
-	filename, err := GetSingleForecast(dt, hour)
-	if err != nil {
-		return "", err
-	}
-
-	allPoints, err := grib.ExtractGribData(filename)
-	if err != nil {
-		utils.Log("Error extracting GRIB data: " + err.Error())
-		return "", err
-	}
-
-	pointsInPolygon := geometry.FilterPointsByPolygon(allPoints, geometry.POLYGON)
-
-	allData := [][]float64{}
-
-	if len(pointsInPolygon) > 0 {
-		for _, point := range pointsInPolygon {
-			value := 0.0
-			if point.Value < 9999 {
-				value = point.Value
-			}
-
-			allData = append(allData, []float64{math.Round(point.Lon*1000)/1000, math.Round(point.Lat*1000)/1000, math.Round(value*100)/100})
-		}
-	}
-
-	storage.Save(allData, hour, dt)
-
-	return "", nil
-}
-
-func StartFetching() {
-	availableRuns := GetAvailableRunDates()
-
-	for _, run := range availableRuns {
-
-		if !CheckIfAllForecastsHoursAreAvailable(run) {
-			continue
-		}
-
-		if storage.IsUpToDate(run) {
-			utils.Log("Forecast already downloaded, skipping " + run)
-			time.Sleep(60 * time.Second)
+func getLatestCompleteRun(forecastPackage ForecastPackage) string {
+	latestCompleteRun := ""
+	for _, run := range getAvailableRunDates() {
+		if allForecastsHoursAreAvailable(forecastPackage.Package, run) {
+			latestCompleteRun = run
 			break
 		}
-
-		utils.Log("Forecast found for " + run)
-
-		var (
-			wg sync.WaitGroup
-		)
-
-		for _, hour := range GetAvailableHours(run) {
-			wg.Add(1)
-			go func(h string) {
-				defer wg.Done()
-				ProcessSingleForecast(run, h)
-			}(hour)
-		}
-
-		wg.Wait()
-
-		storage.RollOut()
-		utils.CleanUpFiles()
-
-		break
 	}
 
-	StartFetching()	
+	return latestCompleteRun
 }
+
+

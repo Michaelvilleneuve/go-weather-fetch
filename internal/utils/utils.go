@@ -1,23 +1,12 @@
 package utils
 
 import (
+	"fmt"
 	"log"
 	"os"
-	"fmt"
+
 	"github.com/joho/godotenv"
 )
-
-
-func CleanUpFiles() {
-	files, err := os.ReadDir("./tmp")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, file := range files {
-		os.Remove("./tmp/" + file.Name())
-	}
-}
 
 func LoadEnv() {
 	err := godotenv.Load(".env")
