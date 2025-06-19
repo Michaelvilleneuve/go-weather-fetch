@@ -1,3 +1,5 @@
+[![Go](https://github.com/Michaelvilleneuve/go-weather-fetch/actions/workflows/go.yml/badge.svg)](https://github.com/Michaelvilleneuve/go-weather-fetch/actions/workflows/go.yml)
+
 # Weather Fetch Go
 A Go application that fetches AROME model data from Météo-France in GRIB2 format, processes it using the eccodes library, and filters geographical data points within a specified polygon region corresponding to the Comunidad Valenciana where I live.
 
