@@ -4,9 +4,13 @@ A Go application that fetches weather forecast data from Météo-France in GRIB2
 
 This data is then exposed as a JSON API and used in https://lesveusdelavall.org to display a 3D map of highly precised rainfall accumulation map. 
 
-<img width="1512" alt="screenshot overall view" src="https://github.com/user-attachments/assets/019adc4f-ce44-4022-a217-b405736a9fd1" />
 
-<img width="1511" alt="screenshot 3D closeup" src="https://github.com/user-attachments/assets/57cd00f9-5a4e-4bb7-b787-48d87e3d0378" />
+![Screenshot 2025-06-19 at 22 34 47](https://github.com/user-attachments/assets/e2ddf00b-1071-4555-a444-3ab8db2189fe)
+![Screenshot 2025-06-19 at 22 34 19](https://github.com/user-attachments/assets/ed945814-085a-4bc3-a5e0-7414abecb8b4)
+![Screenshot 2025-06-19 at 22 33 39](https://github.com/user-attachments/assets/a14c2c9e-6f71-4251-8d3e-9ad1a6eb3503)
+![Screenshot 2025-06-19 at 22 32 46](https://github.com/user-attachments/assets/81f8d537-0834-411c-b468-4a28e9039de0)
+![Screenshot 2025-06-17 at 15 12 24](https://github.com/user-attachments/assets/6f170f5c-c085-4f75-9cf1-cd67f075c069)
+![Screenshot 2025-06-17 at 15 11 56](https://github.com/user-attachments/assets/30cbba20-4ef0-4c20-9047-8d4f343534e0)
 
 
 ## Features
