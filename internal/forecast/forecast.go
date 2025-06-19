@@ -43,7 +43,7 @@ var FORECAST_PACKAGES = []ForecastPackage{
 		Forecasts: []ForecastGroup{
 			{CommonName: "humidity", Fields: []string{"r2"}},
 			{CommonName: "temperature", Fields: []string{"t2m"}},
-			{CommonName: "feels_like_temperature", Fields: []string{"r2", "t2m", "u10", "v10"}},
+			{CommonName: "comfort_index", Fields: []string{"r2", "t2m", "u10", "v10"}},
 		},
 	},
 }
@@ -120,8 +120,8 @@ func ProcessSingleForecast(filename string, commonName string, fields []string, 
 	switch commonName {
 	case "cloud_cover":
 		coordinateMap = fieldshandler.ProcessCloudCover(pointsByField)
-	case "feels_like_temperature":
-		coordinateMap = fieldshandler.ProcessFeelsLikeTemperature(pointsByField)
+	case "comfort_index":
+		coordinateMap = fieldshandler.ProcessComfortIndex(pointsByField)
 	default:
 		coordinateMap = fieldshandler.ProcessDefaultForecast(pointsByField)
 	}

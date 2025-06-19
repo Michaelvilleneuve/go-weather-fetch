@@ -1,17 +1,52 @@
 # Weather Fetch Go
+A Go application that fetches AROME model data from Météo-France in GRIB2 format, processes it using the eccodes library, and filters geographical data points within a specified polygon region corresponding to the Comunidad Valenciana where I live.
 
-A Go application that fetches weather forecast data from Météo-France in GRIB2 format, processes it using the eccodes library, and filters geographical data points within a specified polygon region.
+This data is then exposed as a JSON API and used in https://lesveusdelavall.org to display a 3D map of highly precise forecast (see screenshots below).
 
-This data is then exposed as a JSON API and used in https://lesveusdelavall.org to display a 3D map of highly precised rainfall accumulation map. 
+## Exposed data
+
+All exposed data can be queried via a simple HTTP API : 
+
+```http
+GET /{{ param }}.json?hour={{ hour }}
+```
+
+`hour` ranges from 1 to 51 (AROME model forecast is available for 51 hours)
+
+| Param | Description |
+|-------|-------------|
+| rainfall_accumulation | Rainfall accumulation |
+| cloud_cover | Cloud cover |
+| temperature | Temperature |
+| humidity | Humidity |
+| comfort_index | Comfort index |
 
 
-![Screenshot 2025-06-19 at 22 34 47](https://github.com/user-attachments/assets/e2ddf00b-1071-4555-a444-3ab8db2189fe)
-![Screenshot 2025-06-19 at 22 34 19](https://github.com/user-attachments/assets/ed945814-085a-4bc3-a5e0-7414abecb8b4)
+
+### Rainfall accumulation
+This is the most important data as it allows to understand how relief (visualized in 3D) affects rainfall accumulation. 
+In mountainous areas surrounding the mediterranean sea it is crucial to have a good grasp of this in order to anticipate "Cold drop" episodes like the one that happened in Valencia in October 2024.
+
+![Screenshot 2025-06-17 at 15 11 56](https://github.com/user-attachments/assets/30cbba20-4ef0-4c20-9047-8d4f343534e0)
+![Screenshot 2025-06-17 at 15 12 24](https://github.com/user-attachments/assets/6f170f5c-c085-4f75-9cf1-cd67f075c069)
+
+### Cloud cover
+This is the combined values of low cloud coverage, medium cloud coverage and high cloud coverage. 
 ![Screenshot 2025-06-19 at 22 33 39](https://github.com/user-attachments/assets/a14c2c9e-6f71-4251-8d3e-9ad1a6eb3503)
 ![Screenshot 2025-06-19 at 22 32 46](https://github.com/user-attachments/assets/81f8d537-0834-411c-b468-4a28e9039de0)
-![Screenshot 2025-06-17 at 15 12 24](https://github.com/user-attachments/assets/6f170f5c-c085-4f75-9cf1-cd67f075c069)
-![Screenshot 2025-06-17 at 15 11 56](https://github.com/user-attachments/assets/30cbba20-4ef0-4c20-9047-8d4f343534e0)
 
+### Temperature
+![Screenshot 2025-06-19 at 22 34 47](https://github.com/user-attachments/assets/e2ddf00b-1071-4555-a444-3ab8db2189fe)
+
+### Humidity
+![Screenshot 2025-06-19 at 22 34 19](https://github.com/user-attachments/assets/ed945814-085a-4bc3-a5e0-7414abecb8b4)
+
+### Comfort index
+This data combines different sources (wind, humidity and temperature) to create an accurate representation of how confortable the air feels like. 
+Unlike [heat index](https://en.wikipedia.org/wiki/Heat_index) comfort index also 
+See https://en.wikipedia.org/wiki/Apparent_temperature for reference on this 
+
+![Screenshot 2025-06-19 at 22 40 04](https://github.com/user-attachments/assets/191e3b56-5805-47e9-8a40-2b2a245d5852)
 
 ## Features
 
