@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/forecast/fieldshandler"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/geometry"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/grib"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/storage"
@@ -42,6 +43,7 @@ var FORECAST_PACKAGES = []ForecastPackage{
 		Forecasts: []ForecastGroup{
 			{CommonName: "humidity", Fields: []string{"r2"}},
 			{CommonName: "temperature", Fields: []string{"t2m"}},
+			{CommonName: "feels_like_temperature", Fields: []string{"r2", "t2m", "u10", "v10"}},
 		},
 	},
 }
@@ -112,99 +114,19 @@ func ProcessSingleForecast(filename string, commonName string, fields []string, 
 		return "", err
 	}
 
-	// Aggregate points by coordinates
-	coordinateMap := make(map[string]geometry.GeoPoint)
-
-	if commonName == "cloud_cover" {
-		// Special handling for cloud cover: tcc = lcc + mcc * (1 - lcc) + hcc * (1 - lcc) * (1 - mcc)
-		cloudDataMap := make(map[string]map[string]float64)
-		
-		for fieldName, points := range pointsByField {
-			for _, point := range points {
-				if !geometry.IsPointInPolygon(geometry.Point{Lat: point.Lat, Lon: point.Lon}, geometry.POLYGON) {
-					continue
-				}
-				coordKey := fmt.Sprintf("%.3f,%.3f", math.Round(point.Lon*1000)/1000, math.Round(point.Lat*1000)/1000)
-				
-				if cloudDataMap[coordKey] == nil {
-					cloudDataMap[coordKey] = make(map[string]float64)
-				}
-				
-				value := 0.0
-				if point.Value < 9999 {
-					// Convert from percentage (0-100) to fraction (0-1) if needed
-					// AROME cloud cover values are typically in percentage format
-					value = point.Value
-					if value > 1.0 {
-						value = value / 100.0 // Convert percentage to fraction
-					}
-				}
-				cloudDataMap[coordKey][fieldName] = value
-			}
-		}
-		
-		// Calculate total cloud cover using the formula
-		for coordKey, cloudData := range cloudDataMap {
-			lcc := cloudData["lcc"]
-			mcc := cloudData["mcc"] 
-			hcc := cloudData["hcc"]
-			
-			// Ensure values are in valid range [0,1]
-			lcc = math.Max(0, math.Min(1, lcc))
-			mcc = math.Max(0, math.Min(1, mcc))
-			hcc = math.Max(0, math.Min(1, hcc))
-			
-			// Apply the total cloud cover formula (result is fraction 0-1)
-			tcc := lcc + mcc*(1-lcc) + hcc*(1-lcc)*(1-mcc)
-			
-			// Ensure result is in valid range and convert back to percentage for consistency
-			tcc = math.Max(0, math.Min(1, tcc)) * 100.0
-			
-			// Parse coordinates from key
-			var lon, lat float64
-			fmt.Sscanf(coordKey, "%f,%f", &lon, &lat)
-			
-			coordinateMap[coordKey] = geometry.GeoPoint{
-				Lat:   lat,
-				Lon:   lon,
-				Value: tcc,
-			}
-		}
-	} else {
-		// Default behavior: sum values from all fields
-		for _, points := range pointsByField {
-			
-			for _, point := range points {
-				if !geometry.IsPointInPolygon(geometry.Point{Lat: point.Lat, Lon: point.Lon}, geometry.POLYGON) {
-					continue
-				}
-				// Create a key from rounded coordinates for grouping
-				coordKey := fmt.Sprintf("%.3f,%.3f", math.Round(point.Lon*1000)/1000, math.Round(point.Lat*1000)/1000)
-				
-				if existingPoint, exists := coordinateMap[coordKey]; exists {
-					// Sum the values if coordinate already exists
-					value := 0.0
-					if point.Value < 9999 {
-						value = point.Value
-					}
-					existingPoint.Value += value
-					coordinateMap[coordKey] = existingPoint
-				} else {
-					// Create new point entry
-					value := 0.0
-					if point.Value < 9999 {
-						value = point.Value
-					}
-					coordinateMap[coordKey] = geometry.GeoPoint{
-						Lat:   math.Round(point.Lat*1000)/1000,
-						Lon:   math.Round(point.Lon*1000)/1000,
-						Value: value,
-					}
-				}
-			}
-		}
+	// Process data based on forecast type
+	var coordinateMap map[string]geometry.GeoPoint
+	
+	switch commonName {
+	case "cloud_cover":
+		coordinateMap = fieldshandler.ProcessCloudCover(pointsByField)
+	case "feels_like_temperature":
+		coordinateMap = fieldshandler.ProcessFeelsLikeTemperature(pointsByField)
+	default:
+		coordinateMap = fieldshandler.ProcessDefaultForecast(pointsByField)
 	}
 	
+	// Convert coordinate map to output format
 	allData := [][]float64{}
 	for _, point := range coordinateMap {
 		allData = append(allData, []float64{point.Lon, point.Lat, math.Round(point.Value*100)/100})
