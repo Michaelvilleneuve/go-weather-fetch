@@ -26,22 +26,22 @@ type ForecastPackage struct {
 }
 
 const (
-	FORECAST_HOURS = 10
+	FORECAST_HOURS = 51
 )
 
 var FORECAST_PACKAGES = []ForecastPackage{
 	{
 		Package: "SP2",
 		Forecasts: []ForecastGroup{
-			// {CommonName: "rainfall_accumulation", Fields: []string{"tirf"}},
+			{CommonName: "rainfall_accumulation", Fields: []string{"tirf"}},
 			{CommonName: "cloud_cover", Fields: []string{"lcc", "mcc", "hcc"}},
 		},
 	},
 	{
 		Package: "SP1",
 		Forecasts: []ForecastGroup{
-			// {CommonName: "humidity", Fields: []string{"r2"}},
-			// {CommonName: "temperature", Fields: []string{"t2m"}},
+			{CommonName: "humidity", Fields: []string{"r2"}},
+			{CommonName: "temperature", Fields: []string{"t2m"}},
 		},
 	},
 }
