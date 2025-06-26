@@ -27,23 +27,23 @@ type ForecastPackage struct {
 }
 
 const (
-	FORECAST_HOURS = 1
+	FORECAST_HOURS = 2
 )
 
 var FORECAST_PACKAGES = []ForecastPackage{
-	// {
-	// 	Package: "SP2",
-	// 	Forecasts: []ForecastGroup{
-	// 		{CommonName: "rainfall_accumulation", Fields: []string{"tirf"}},
-	// 		// {CommonName: "cloud_cover", Fields: []string{"lcc", "mcc", "hcc"}},
-	// 	},
-	// },
+	{
+		Package: "SP2",
+		Forecasts: []ForecastGroup{
+			{CommonName: "rainfall_accumulation", Fields: []string{"tirf"}},
+			{CommonName: "cloud_cover", Fields: []string{"lcc", "mcc", "hcc"}},
+		},
+	},
 	{
 		Package: "SP1",
 		Forecasts: []ForecastGroup{
-			// {CommonName: "humidity", Fields: []string{"r2"}},
+			{CommonName: "humidity", Fields: []string{"r2"}},
 			{CommonName: "temperature", Fields: []string{"t2m"}},
-			// {CommonName: "comfort_index", Fields: []string{"r2", "t2m", "u10", "v10"}},
+			{CommonName: "comfort_index", Fields: []string{"r2", "t2m", "u10", "v10"}},
 		},
 	},
 }
@@ -102,9 +102,15 @@ func processForecastPackage(forecastPackage ForecastPackage) {
 }
 
 func processForecastGroup(filename string, forecastPackage ForecastPackage, run string, hour string) {
+	var wg sync.WaitGroup
 	for _, forecastGroup := range forecastPackage.Forecasts {
-		ProcessSingleForecast(filename, forecastGroup.CommonName, forecastGroup.Fields, run, hour)
+		wg.Add(1)
+		go func(fg ForecastGroup) {
+			defer wg.Done()
+			ProcessSingleForecast(filename, fg.CommonName, fg.Fields, run, hour)
+		}(forecastGroup)
 	}
+	wg.Wait()
 }
 
 func ProcessSingleForecast(filename string, commonName string, fields []string, dt string, hour string) (string, error) {

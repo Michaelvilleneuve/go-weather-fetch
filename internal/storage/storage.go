@@ -159,7 +159,7 @@ func Save(data [][]float64, packageName string, hour string, original_time strin
 		"--drop-densest-as-needed",
 		"--force",
 		"--maximum-zoom=9",
-		"--minimum-zoom=8",
+		"--minimum-zoom=7",
 		outputFile,
 	)
 
@@ -171,6 +171,10 @@ func Save(data [][]float64, packageName string, hour string, original_time strin
 	}
 
 	utils.Log(fmt.Sprintf("Successfully generated %s.mbtiles", outputFile))
+
+	// Remove the geojson file
+	os.Remove(outputFile)
+
 	return outputFile + ".mbtiles", nil
 }
 
