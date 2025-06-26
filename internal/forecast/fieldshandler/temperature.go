@@ -7,8 +7,8 @@ import (
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/geometry"
 )
 
-// ProcessDefaultForecast handles the default behavior of summing values from all fields
-func ProcessDefaultForecast(pointsByField map[string][]geometry.GeoPoint) map[string]geometry.GeoPoint {
+// ProcessTemperatureForecast handles the temperature behavior of summing values from all fields
+func ProcessTemperatureForecast(pointsByField map[string][]geometry.GeoPoint) map[string]geometry.GeoPoint {
 	coordinateMap := make(map[string]geometry.GeoPoint)
 	
 	for _, points := range pointsByField {
@@ -30,7 +30,7 @@ func ProcessDefaultForecast(pointsByField map[string][]geometry.GeoPoint) map[st
 				coordinateMap[coordKey] = geometry.GeoPoint{
 					Lat:   math.Round(point.Lat*1000)/1000,
 					Lon:   math.Round(point.Lon*1000)/1000,
-					Value: value,
+					Value: value - 273.15, // Convert Kelvin to Celsius
 				}
 			}
 		}

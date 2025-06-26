@@ -27,23 +27,23 @@ type ForecastPackage struct {
 }
 
 const (
-	FORECAST_HOURS = 51
+	FORECAST_HOURS = 1
 )
 
 var FORECAST_PACKAGES = []ForecastPackage{
-	{
-		Package: "SP2",
-		Forecasts: []ForecastGroup{
-			{CommonName: "rainfall_accumulation", Fields: []string{"tirf"}},
-			{CommonName: "cloud_cover", Fields: []string{"lcc", "mcc", "hcc"}},
-		},
-	},
+	// {
+	// 	Package: "SP2",
+	// 	Forecasts: []ForecastGroup{
+	// 		{CommonName: "rainfall_accumulation", Fields: []string{"tirf"}},
+	// 		// {CommonName: "cloud_cover", Fields: []string{"lcc", "mcc", "hcc"}},
+	// 	},
+	// },
 	{
 		Package: "SP1",
 		Forecasts: []ForecastGroup{
-			{CommonName: "humidity", Fields: []string{"r2"}},
+			// {CommonName: "humidity", Fields: []string{"r2"}},
 			{CommonName: "temperature", Fields: []string{"t2m"}},
-			{CommonName: "comfort_index", Fields: []string{"r2", "t2m", "u10", "v10"}},
+			// {CommonName: "comfort_index", Fields: []string{"r2", "t2m", "u10", "v10"}},
 		},
 	},
 }
@@ -122,6 +122,8 @@ func ProcessSingleForecast(filename string, commonName string, fields []string, 
 		coordinateMap = fieldshandler.ProcessCloudCover(pointsByField)
 	case "comfort_index":
 		coordinateMap = fieldshandler.ProcessComfortIndex(pointsByField)
+	case "temperature":
+		coordinateMap = fieldshandler.ProcessTemperatureForecast(pointsByField)
 	default:
 		coordinateMap = fieldshandler.ProcessDefaultForecast(pointsByField)
 	}

@@ -35,10 +35,6 @@ func ProcessCloudCover(pointsByField map[string][]geometry.GeoPoint) map[string]
 	// Collect cloud data by coordinate
 	for fieldName, points := range pointsByField {
 		for _, point := range points {
-			if !geometry.IsPointInPolygon(geometry.Point{Lat: point.Lat, Lon: point.Lon}, geometry.POLYGON) {
-				continue
-			}
-
 			coordKey := fmt.Sprintf("%.3f,%.3f", math.Round(point.Lon*1000)/1000, math.Round(point.Lat*1000)/1000)
 
 			if cloudDataMap[coordKey] == nil {
