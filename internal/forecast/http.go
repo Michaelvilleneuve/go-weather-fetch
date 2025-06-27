@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
 	_ "github.com/mattn/go-sqlite3"
@@ -22,7 +23,7 @@ func Serve() {
 				
 				http.HandleFunc("/tiles/" + commonName + "/" + hourStr + "/", func(w http.ResponseWriter, r *http.Request) {
 					// Add CORS headers
-					w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+					w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000, https://mistral.earth")
 					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 					w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
@@ -66,15 +67,40 @@ func Serve() {
 				})
 			}
 		}
-	}	
+	}
+
+	http.HandleFunc("/metadata.json", metadataHandler)
 }
 
-func tileHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
-	// Add CORS headers
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+func metadataHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000, https://app.mistral.earth")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
+	w.Header().Set("Content-Type", "application/json")
+
+	w.WriteHeader(http.StatusOK)
+	// Read the current run datetime from storage
+	content, err := os.ReadFile("storage/SP1_current_run_datetime.txt")
+	if err != nil {
+		utils.Log("Error reading current run datetime: " + err.Error())
+		w.Write([]byte(`{"run_hour": ""}`))
+		return
+	}
+
+	// Trim any whitespace and write the datetime
+	datetime := strings.TrimSpace(string(content))
+	parsedDatetime, err := time.Parse("2006-01-02T15:04:05Z", datetime)
+	if err != nil {
+		utils.Log("Error parsing datetime: " + err.Error())
+		w.Write([]byte(`{"run_hour": ""}`))
+		return
+	}
+	datetimeStartHour := parsedDatetime.Add(time.Hour * 1).Format("2006-01-02T15:04:05Z")
+	w.Write([]byte(fmt.Sprintf(`{"run_hour": "%s", "start_hour": "%s"}`, datetime, datetimeStartHour)))
+}
+
+func tileHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	// URL: /tiles/{forecast_group}/{hour}/{z}/{x}/{y}.pbf
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 5 {

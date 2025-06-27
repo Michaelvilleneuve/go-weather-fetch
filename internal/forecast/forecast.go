@@ -27,7 +27,7 @@ type ForecastPackage struct {
 }
 
 const (
-	FORECAST_HOURS = 2
+	FORECAST_HOURS = 24
 )
 
 var FORECAST_PACKAGES = []ForecastPackage{
