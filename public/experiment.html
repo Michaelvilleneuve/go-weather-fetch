@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Météo - Tuiles Vectorielles</title>
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+        
+        .control-group {
+            margin-bottom: 10px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        select, input {
+            width: 200px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        
+        .legend {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 15px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div id='map'></div>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label for="forecast-type">Type de prévision :</label>
+            <select id="forecast-type">
+                <option value="cloud_cover">Couverture nuageuse</option>
+                <option value="rainfall_accumulation">Précipitations</option>
+                <option value="temperature">Température</option>
+                <option value="humidity">Humidité</option>
+                <option value="comfort_index">Indice de confort</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="hour-slider">Heure de prévision :</label>
+            <input type="range" id="hour-slider" min="1" max="51" value="1">
+            <span id="hour-display">Heure 1</span>
+        </div>
+        
+        <div class="control-group">
+            <label for="opacity-slider">Opacité :</label>
+            <input type="range" id="opacity-slider" min="0" max="100" value="70">
+            <span id="opacity-display">70%</span>
+        </div>
+        
+        <div class="control-group">
+            <label for="pitch-slider">Angle de vue 3D :</label>
+            <input type="range" id="pitch-slider" min="0" max="60" value="45">
+            <span id="pitch-display">45°</span>
+        </div>
+        
+        <div class="control-group">
+            <label for="terrain-slider">Exagération du terrain :</label>
+            <input type="range" id="terrain-slider" min="0" max="3" step="0.1" value="1.5">
+            <span id="terrain-display">1.5x</span>
+        </div>
+    </div>
+    
+    <div class="legend" id="legend">
+        <h4>Légende</h4>
+        <div id="legend-content"></div>
+    </div>
+
+    <script>
+        // Configuration des types de prévisions
+        const forecastConfigs = {
+            cloud_cover: {
+                name: 'Couverture nuageuse',
+                unit: '%',
+                colorStops: [
+                    [0, 'transparent'],   // Ciel clair
+                    [25, 'rgba(255,255,255, 0.2)'],  // Nuages légers
+                    [50, 'rgba(255,255,255, 0.3)'],  // Nuages modérés
+                    [75, 'rgba(255,255,255, 0.5)'],  // Nuages denses
+                    [100, 'rgba(255,255,255, 0.8)']  // Très nuageux
+                ]
+            },
+            temperature: {
+                name: 'Température',
+                unit: '°C',
+                colorStops: [
+                    [-20, '#000080'], // Bleu foncé
+                    [-10, '#0000ff'], // Bleu
+                    [0, '#00ffff'],   // Cyan
+                    [10, '#00ff00'],  // Vert
+                    [20, '#ffff00'],  // Jaune
+                    [30, '#ff8000'],  // Orange
+                    [40, '#ff0000']   // Rouge
+                ]
+            },
+            humidity: {
+                name: 'Humidité',
+                unit: '%',
+                colorStops: [
+                    [0, '#8B4513'],   // Marron (sec)
+                    [20, '#DAA520'],  // Or
+                    [40, '#FFFF00'],  // Jaune
+                    [60, '#90EE90'],  // Vert clair
+                    [80, '#0000FF'],  // Bleu
+                    [100, '#000080']  // Bleu foncé (très humide)
+                ]
+            },
+            
+            rainfall_accumulation: {
+                name: 'Précipitations',
+                unit: 'mm',
+                colorStops: [
+                    [0, 'transparent'],   // Blanc (pas de pluie)
+                    [1, '#e6f3ff'],   // Bleu très clair
+                    [5, '#b3d9ff'],   // Bleu clair
+                    [10, '#66b3ff'],  // Bleu moyen
+                    [20, '#0080ff'],  // Bleu
+                    [50, '#0040cc']   // Bleu foncé
+                ]
+            },
+            comfort_index: {
+                name: 'Indice de confort',
+                unit: '/10',
+                colorStops: [
+                  [0, '#00ff80'],   // Vert excellent
+                  [2, '#00ff00'],   // Vert
+                  [4, '#80ff00'],   // Vert clair
+                  [6, '#ffff00'],   // Jaune
+                  [8, '#ff8000'],   // Orange
+                  [10, '#ff0000']   // Rouge (très inconfortable)
+                ]
+            }
+        };
+
+        // Initialiser la carte
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/satellite-v9', // Satellite view
+            center: [0.5, 38.5], // Centré sur votre zone d'étude
+            zoom: 8,
+            minZoom: 7.3,
+
+            pitch: 45, // Angle de vue 3D
+            bearing: 0, // Rotation de la carte
+            antialias: false, // Améliore le rendu 3D
+            accessToken: 'pk.eyJ1IjoibWljaGFlbHZpbGxlbmV1dmUiLCJhIjoiY201MHlqZ2h2MXpmaDJqcXc3cHNka2xmeiJ9.aam0u_YExa5to859TlZCyg' // Remplacez par votre token Mapbox
+        });
+
+        let currentForecastType = 'temperature';
+        let currentHour = 1;
+
+        map.on('load', function() {
+            console.log('Map loaded, initializing 3D features and weather layers...');
+            
+            // Ajouter le terrain 3D
+            add3DTerrain();
+            
+            // Ajouter la source de données météo
+            addWeatherSource();
+            
+            // Ajouter la couche de visualisation
+            addWeatherLayer();
+            
+            // Mettre à jour la légende
+            updateLegend();
+            
+            // Ajouter l'interactivité
+            addInteractivity();
+        });
+
+        // Ajouter la gestion des erreurs pour les tuiles
+        map.on('error', function(e) {
+            console.error('Map error:', e);
+        });
+
+        map.on('sourcedata', function(e) {
+            if (e.sourceId === 'weather-data') {
+                console.log('Weather data source event:', e.dataType);
+                if (e.isSourceLoaded) {
+                    console.log('Weather data source loaded successfully');
+                }
+            }
+        });
+
+        function add3DTerrain() {
+            // Ajouter la source de terrain Mapbox
+            map.addSource('mapbox-dem', {
+                'type': 'raster-dem',
+                'url': 'mapbox://mapbox.mapbox-terrain-dem-v1',
+                'tileSize': 512,
+                'maxzoom': 14
+            });
+            
+            // Appliquer le terrain à la carte
+            map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 1.5 });
+            
+            // Ajouter une couche de ciel pour l'effet 3D
+            map.addLayer({
+                'id': 'sky',
+                'type': 'sky',
+                'paint': {
+                    'sky-type': 'atmosphere',
+                    'sky-atmosphere-sun': [0.0, 0.0],
+                    'sky-atmosphere-sun-intensity': 15
+                }
+            });
+        }
+
+        function addWeatherSource() {
+            const hourStr = currentHour.toString().padStart(2, '0');
+            const tileUrl = `http://localhost:8081/tiles/${currentForecastType}/${hourStr}/{z}/{x}/{y}.pbf`;
+            
+            console.log('Adding weather source with URL:', tileUrl);
+            
+            map.addSource('weather-data', {
+                type: 'vector',
+                tiles: [tileUrl],
+                minzoom:7,
+                maxzoom: 9
+            });
+        }
+
+        function addWeatherLayer() {
+            const config = forecastConfigs[currentForecastType];
+            
+            // Créer l'expression de couleur pour Mapbox
+            const colorExpression = ['interpolate', ['linear'], ['get', 'value']];
+            config.colorStops.forEach(([value, color]) => {
+                colorExpression.push(value, color);
+            });
+
+            // Le nom de la source-layer doit correspondre au nom utilisé lors de la création des tuiles PBF
+            // Généralement, c'est juste le nom sans extension .geojson
+            const sourceLayerName = `${currentForecastType}_${currentHour.toString().padStart(2, '0')}`;
+
+            console.log('Adding weather layer with source-layer:', sourceLayerName);
+            console.log('Color expression:', colorExpression);
+
+            map.addLayer({
+                id: 'weather-layer',
+                type: 'fill',
+                source: 'weather-data',
+                'source-layer': sourceLayerName,
+                paint: {
+                    'fill-color': colorExpression,
+                    'fill-opacity': 0.7
+                }
+            });
+        }
+
+        function updateWeatherLayer() {
+            const hourStr = currentHour.toString().padStart(2, '0');
+            const config = forecastConfigs[currentForecastType];
+            
+            // Mettre à jour la source
+            map.getSource('weather-data').setTiles([
+                `http://localhost:8081/tiles/${currentForecastType}/${hourStr}/{z}/{x}/{y}.pbf`
+            ]);
+            
+            // Supprimer les couches existantes
+            if (map.getLayer('weather-layer')) {
+                map.removeLayer('weather-layer');
+            }
+            
+            // Recréer les couches avec la nouvelle source-layer
+            const newSourceLayer = `${currentForecastType}_${hourStr}`;
+            
+            // Créer l'expression de couleur
+            const colorExpression = ['interpolate', ['linear'], ['get', 'value']];
+            config.colorStops.forEach(([value, color]) => {
+                colorExpression.push(value, color);
+            });
+
+            // Ajouter la couche principale
+            map.addLayer({
+                id: 'weather-layer',
+                type: 'fill',
+                source: 'weather-data',
+                'source-layer': newSourceLayer,
+                paint: {
+                    'fill-color': colorExpression,
+                    'fill-opacity': document.getElementById('opacity-slider').value / 100
+                }
+            });
+            // Réinitialiser l'interactivité pour les nouvelles couches
+            setupLayerInteractivity();
+        }
+
+        function addInteractivity() {
+            setupLayerInteractivity();
+        }
+
+        function setupLayerInteractivity() {
+            // Supprimer les anciens gestionnaires d'événements s'ils existent
+            map.off('click', 'weather-layer');
+            map.off('mouseenter', 'weather-layer');
+            map.off('mouseleave', 'weather-layer');
+
+            // Popup au clic
+            map.on('click', 'weather-layer', function(e) {
+                const properties = e.features[0].properties;
+                const config = forecastConfigs[currentForecastType];
+                
+                new mapboxgl.Popup()
+                    .setLngLat(e.lngLat)
+                    .setHTML(`
+                        <div>
+                            <strong>${config.name}</strong><br>
+                            Valeur: ${properties.value} ${config.unit}<br>
+                            Coordonnées: ${e.lngLat.lat.toFixed(3)}, ${e.lngLat.lng.toFixed(3)}
+                        </div>
+                    `)
+                    .addTo(map);
+            });
+
+            // Changer le curseur au survol
+            map.on('mouseenter', 'weather-layer', function() {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'weather-layer', function() {
+                map.getCanvas().style.cursor = '';
+            });
+        }
+
+        function updateLegend() {
+            const config = forecastConfigs[currentForecastType];
+            const legendContent = document.getElementById('legend-content');
+            
+            legendContent.innerHTML = '';
+            
+            config.colorStops.forEach(([value, color]) => {
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = `
+                    <div class="legend-color" style="background-color: ${color}"></div>
+                    <span>${value} ${config.unit}</span>
+                `;
+                legendContent.appendChild(item);
+            });
+        }
+
+        // Gestionnaires d'événements pour les contrôles
+        document.getElementById('forecast-type').addEventListener('change', function(e) {
+            currentForecastType = e.target.value;
+            updateWeatherLayer();
+            updateLegend();
+        });
+
+        document.getElementById('hour-slider').addEventListener('input', function(e) {
+            currentHour = parseInt(e.target.value);
+            document.getElementById('hour-display').textContent = `Heure ${currentHour}`;
+            updateWeatherLayer();
+        });
+
+        document.getElementById('opacity-slider').addEventListener('input', function(e) {
+            const opacity = e.target.value / 100;
+            document.getElementById('opacity-display').textContent = `${e.target.value}%`;
+            map.setPaintProperty('weather-layer', 'fill-opacity', opacity);
+        });
+
+        document.getElementById('pitch-slider').addEventListener('input', function(e) {
+            const pitch = parseInt(e.target.value);
+            document.getElementById('pitch-display').textContent = `${pitch}°`;
+            map.setPitch(pitch);
+        });
+
+        document.getElementById('terrain-slider').addEventListener('input', function(e) {
+            const exaggeration = parseFloat(e.target.value);
+            document.getElementById('terrain-display').textContent = `${exaggeration}x`;
+            map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': exaggeration });
+        });
+    </script>
+</body>
+</html>
