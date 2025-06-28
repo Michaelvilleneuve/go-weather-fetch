@@ -23,15 +23,7 @@ func Serve() {
 				
 				http.HandleFunc("/tiles/" + commonName + "/" + hourStr + "/", func(w http.ResponseWriter, r *http.Request) {
 					// Add CORS headers
-					w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000, https://mistral.earth")
-					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-					w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-					// Handle preflight requests
-					if r.Method == "OPTIONS" {
-						w.WriteHeader(http.StatusOK)
-						return
-					}
+					setCORSHeaders(w, r)
 
 					filePath := "storage/" + commonName + "_" + hourStr + ".geojson.mbtiles"
 					
@@ -73,9 +65,7 @@ func Serve() {
 }
 
 func metadataHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000, https://app.mistral.earth")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	setCORSHeaders(w, r)
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -112,12 +102,6 @@ func tileHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	x, _ := strconv.Atoi(parts[5])
 	yParts := strings.Split(parts[6], ".")
 	y, _ := strconv.Atoi(yParts[0])
-	format := yParts[1]
-	
-	utils.Log("format: " + format)
-	utils.Log("z: " + strconv.Itoa(z))
-	utils.Log("x: " + strconv.Itoa(x))
-	utils.Log("y: " + strconv.Itoa(y))
 	
 	// Flip Y for TMS
 	y = (1 << uint(z)) - 1 - y
@@ -140,4 +124,20 @@ func tileHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	w.Header().Set("Content-Encoding", "gzip")
 
 	w.Write(tileData)
+}
+
+func setCORSHeaders(w http.ResponseWriter, r *http.Request) {
+	origin := os.Getenv("HOST_ORIGIN")
+	if origin == "" {
+		origin = "http://localhost:3000"
+	}
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	// Handle preflight requests
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 }

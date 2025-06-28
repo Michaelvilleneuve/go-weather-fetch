@@ -38,8 +38,7 @@ WORKDIR /app
 
 COPY --from=builder /app/weather-fetch-go .
 
-RUN mkdir -p tmp storage && \
-    chown -R appuser:appgroup /app
+RUN chown -R appuser:appgroup /app
 
 USER appuser
 
