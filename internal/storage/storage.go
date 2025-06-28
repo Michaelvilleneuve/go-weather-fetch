@@ -154,6 +154,10 @@ func Save(data [][]float64, packageName string, hour string, original_time strin
 	file.WriteString(`]}`)
 	file.Sync()
 
+	return convertToMBTiles(outputFile)
+}
+
+func convertToMBTiles(outputFile string) (string, error) {
 	utils.Log("Tippecanoe command for " + outputFile)
 
 	cmd := exec.Command("tippecanoe",
@@ -161,7 +165,7 @@ func Save(data [][]float64, packageName string, hour string, original_time strin
 		"--read-parallel",
 		"--drop-densest-as-needed",
 		"--force",
-		"--minimum-zoom=5",
+		"--minimum-zoom=7",
 		"--maximum-zoom=9",
 		outputFile,
 	)

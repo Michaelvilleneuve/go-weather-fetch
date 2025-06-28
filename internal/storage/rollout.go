@@ -12,7 +12,7 @@ import (
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
 )
 
-func WatchForWorkerChanges() {
+func WatchForWorkerRollout() {
 	go func() {
 		for {
 			files, err := filepath.Glob("tmp/*.mbtiles")
@@ -49,6 +49,8 @@ func RollOut(forecastPackages []arome.AromePackage) {
 }
 
 func rolloutLocally(forecastPackages []arome.AromePackage) {
+	utils.Log("Rolling out locally")
+	
 	for _, forecastPackage := range forecastPackages {
 		for _, commonName := range forecastPackage.GetLayerNames() {
 			files, err := filepath.Glob(fmt.Sprintf("tmp/%s_*.geojson.mbtiles", commonName))
@@ -66,13 +68,18 @@ func rolloutLocally(forecastPackages []arome.AromePackage) {
 			}
 		}
 
+		err := moveFile(fmt.Sprintf("tmp/%s_current_run_datetime.txt", forecastPackage.Name), fmt.Sprintf("storage/%s_current_run_datetime.txt", forecastPackage.Name))
+		if err != nil {
+			utils.Log("Error moving file " + fmt.Sprintf("tmp/%s_current_run_datetime.txt", forecastPackage.Name) + ": " + err.Error())
+		}
+
 		CleanUpFiles(forecastPackage.Name)
 	}
 }
 
 func rolloutRemotely(forecastPackages []arome.AromePackage) {
-	utils.Log("Rolling out remotely")
 	targetHost := os.Getenv("ROLLOUT_TARGET_HOST")
+	utils.Log("Rolling out remotely to " + targetHost)
 	
 	for _, forecastPackage := range forecastPackages {
 		for _, commonName := range forecastPackage.GetLayerNames() {
