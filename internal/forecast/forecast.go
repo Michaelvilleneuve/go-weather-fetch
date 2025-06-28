@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -27,7 +28,8 @@ type ForecastPackage struct {
 }
 
 const (
-	FORECAST_HOURS = 24
+	DEFAULT_START_HOUR = 1
+	DEFAULT_END_HOUR   = 51
 )
 
 var FORECAST_PACKAGES = []ForecastPackage{
@@ -78,19 +80,28 @@ func processForecastPackage(forecastPackage ForecastPackage) {
 
 	utils.Log("Forecast found for package " + forecastPackage.Package + " run: " + run)
 
-	// Process each hour from 1 to 51
-	for _, hour := range getAvailableHours() {
-		filename, err := downloadPackage(forecastPackage.Package, run, hour)
-		if err != nil {
-			utils.Log("Error getting single forecast: " + err.Error())
-			return
-		}
+	var hourWg sync.WaitGroup
+	hours := getAvailableHours()
+	
+	for _, hour := range hours {
+		hourWg.Add(1)
+		go func(h string) {
+			defer hourWg.Done()
+			
+			filename, err := downloadPackage(forecastPackage.Package, run, h)
+			if err != nil {
+				utils.Log("Error getting single forecast: " + err.Error())
+				return
+			}
 
-		utils.Log("Forecast retrieved for " + run + " " + hour)
+			utils.Log("Forecast retrieved for " + run + " " + h)
 
-		// Now we process each param (temperature, humidity) of a given package
-		processForecastGroup(filename, forecastPackage, run, hour)
+			// Now we process each param (temperature, humidity) of a given package
+			processForecastGroup(filename, forecastPackage, run, h)
+		}(hour)
 	}
+	
+	hourWg.Wait()
 
 	// Extract common names from forecast groups
 	commonNames := make([]string, len(forecastPackage.Forecasts))
@@ -227,10 +238,28 @@ func downloadPackage(packageName string, dt string, hour string) (string, error)
 }
 
 func getAvailableHours() []string {
-	hours := make([]string, FORECAST_HOURS)
+	startHour := DEFAULT_START_HOUR
+	endHour := DEFAULT_END_HOUR
 
-	for i := 0; i < FORECAST_HOURS; i++ {
-		hours[i] = fmt.Sprintf("%02d", i + 1)
+	// Parse start hour from environment variable
+	if startStr := os.Getenv("FORECAST_START_HOUR"); startStr != "" {
+		if parsed, err := strconv.Atoi(startStr); err == nil && parsed >= 1 {
+			startHour = parsed
+		}
+	}
+
+	// Parse end hour from environment variable
+	if endStr := os.Getenv("FORECAST_END_HOUR"); endStr != "" {
+		if parsed, err := strconv.Atoi(endStr); err == nil && parsed >= startHour {
+			endHour = parsed
+		}
+	}
+
+	numHours := endHour - startHour + 1
+	hours := make([]string, numHours)
+
+	for i := 0; i < numHours; i++ {
+		hours[i] = fmt.Sprintf("%02d", startHour + i)
 	}
 
 	return hours

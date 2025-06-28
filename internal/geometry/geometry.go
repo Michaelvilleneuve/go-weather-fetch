@@ -1,17 +1,31 @@
 package geometry
 
-import "math"
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"math"
+	"os"
+)
 
 const (
 	EARTH_RADIUS_KM = 6371
 )
 
-var POLYGON = []Point{
-	{Lat: 39.7153328, Lon: 1.1861908},
-	{Lat: 39.7097536, Lon: 0.3860986},
-	{Lat: 39.7049828, Lon: -1.2260914},
-	{Lat: 37.8525431, Lon: -1.2438369},
-	{Lat: 37.8358186, Lon: 1.1625552},
+func GetPolygon() ([]Point, error) {
+	polygonEnv := os.Getenv("POLYGON_COORDINATES")
+
+	if polygonEnv == "" {
+		return []Point{}, fmt.Errorf("POLYGON_COORDINATES not set")
+	}
+
+	var polygon []Point
+	if err := json.Unmarshal([]byte(polygonEnv), &polygon); err != nil {
+		log.Printf("Error parsing POLYGON_COORDINATES: %v", err)
+		return []Point{}, err
+	}
+
+	return polygon, nil
 }
 
 type GeoPoint struct {
@@ -25,7 +39,13 @@ type Point struct {
 	Lon float64
 }
 
-func IsPointInPolygon(point Point, polygon []Point) bool {
+func IsPointInPolygon(point Point) bool {
+	polygon, err := GetPolygon()
+
+	if err != nil {
+		return true
+	}
+
 	x, y := point.Lon, point.Lat
 	n := len(polygon)
 	inside := false
@@ -50,16 +70,4 @@ func IsPointInPolygon(point Point, polygon []Point) bool {
 	}
 
 	return inside
-}
-
-func FilterPointsByPolygon(points []GeoPoint, polygon []Point) []GeoPoint {
-	var filtered []GeoPoint
-
-	for _, point := range points {
-		if IsPointInPolygon(Point{Lat: point.Lat, Lon: point.Lon}, polygon) {
-			filtered = append(filtered, point)
-		}
-	}
-
-	return filtered
 }
