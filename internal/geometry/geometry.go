@@ -8,10 +8,6 @@ import (
 	"os"
 )
 
-const (
-	EARTH_RADIUS_KM = 6371
-)
-
 func GetPolygon() ([]Point, error) {
 	polygonEnv := os.Getenv("POLYGON_COORDINATES")
 

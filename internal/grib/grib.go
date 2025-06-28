@@ -71,11 +71,11 @@ func extractAllMessages(buf []byte, fields []string) (map[string][]geometry.GeoP
 		
 		for _, field := range fields {
 			if shouldProcessMessage(handle, field) {
-			points, err := extractGribDataFromHandle(handle, field)
-			if err != nil {
-				C.codes_handle_delete(handle)
-				return nil, err
-			}
+				points, err := extractGribDataFromHandle(handle, field)
+				if err != nil {
+					C.codes_handle_delete(handle)
+					return nil, err
+				}
 				pointsByField[field] = append(pointsByField[field], points...)
 			}
 		}
