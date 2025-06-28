@@ -1,13 +1,21 @@
 FROM golang:1.24.3-bullseye AS builder
 
-# Install build dependencies including eccodes
+# Install build dependencies including eccodes, tippecanoe, and scp
 RUN apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
     libeccodes-dev \
     ca-certificates \
     git \
+    openssh-client \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Tippecanoe from source
+RUN git clone https://github.com/felt/tippecanoe.git /tmp/tippecanoe && \
+    cd /tmp/tippecanoe && \
+    make -j$(nproc) && \
+    make install && \
+    rm -rf /tmp/tippecanoe
 
 WORKDIR /app
 
@@ -29,6 +37,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     tzdata \
     wget \
+    openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g 1001 appgroup && \
@@ -37,6 +46,7 @@ RUN groupadd -g 1001 appgroup && \
 WORKDIR /app
 
 COPY --from=builder /app/weather-fetch-go .
+COPY --from=builder /usr/local/bin/tippecanoe* /usr/local/bin/
 
 RUN chown -R appuser:appgroup /app
 
