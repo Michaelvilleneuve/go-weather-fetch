@@ -19,6 +19,7 @@ func main() {
 		go server.Serve()
 		forecast.StartFetching()
 	} else {
+		storage.WatchForWorkerChanges()
 		server.Serve()
 	}
 }

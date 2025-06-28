@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -193,75 +192,6 @@ func IsUpToDate(packageName string, dt string) bool {
 
 	return isUpToDate
 }
-
-func RollOut(packageName string, commonNames []string) {
-	if os.Getenv("ROLLOUT_TARGET_HOST") == "" {
-		rolloutLocally(packageName, commonNames)
-	} else {
-		rolloutRemotely(packageName, commonNames)
-	}
-}
-
-func rolloutLocally(packageName string, commonNames []string) {
-	for _, commonName := range commonNames {
-		files, err := filepath.Glob(fmt.Sprintf("tmp/%s_*.geojson.mbtiles", commonName))
-		if err != nil {
-			utils.Log("Error during globbing: " + err.Error())
-			return
-		}
-
-		for _, src := range files {
-			dst := filepath.Join("storage", filepath.Base(src))
-			err := moveFile(src, dst)
-			if err != nil {
-				utils.Log("Error moving file " + src + ": " + err.Error())
-			}
-		}
-	}
-
-	CleanUpFiles(packageName)
-}
-
-func rolloutRemotely(packageName string, commonNames []string) {
-	utils.Log("Rolling out remotely")
-	targetHost := os.Getenv("ROLLOUT_TARGET_HOST")
-	
-	for _, commonName := range commonNames {
-		files, err := filepath.Glob(fmt.Sprintf("tmp/%s_*.geojson.mbtiles", commonName))
-		if err != nil {
-			utils.Log("Error during globbing: " + err.Error())
-			return
-		}
-
-		for _, src := range files {
-			dst := filepath.Join("/data/storage/weather-fetch/tmp", filepath.Base(src))
-			cmd := exec.Command("scp", src, fmt.Sprintf("%s:%s", targetHost, dst))
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				utils.Log(fmt.Sprintf("Error copying file %s: %s\nOutput: %s", src, err.Error(), string(output)))
-			}
-		}
-	}
-
-	err := moveFile(fmt.Sprintf("tmp/%s_current_run_datetime.txt", packageName), fmt.Sprintf("storage/%s_current_run_datetime.txt", packageName))
-	if err != nil {
-		utils.Log("Error moving file " + fmt.Sprintf("tmp/%s_current_run_datetime.txt", packageName) + ": " + err.Error())
-	}
-
-	src := fmt.Sprintf("storage/%s_current_run_datetime.txt", packageName)
-	dst := fmt.Sprintf("/data/storage/weather-fetch/tmp/%s_current_run_datetime.txt", packageName)
-	cmd := exec.Command("scp", src, fmt.Sprintf("%s:%s", targetHost, dst))
-
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		utils.Log(fmt.Sprintf("Error copying file %s: %s\nOutput: %s", src, err.Error(), string(output)))
-	}
-
-	CleanUpFiles(packageName)
-	utils.Log("Done.")
-}
-
 
 func moveFile(src, dst string) error {
 	err := os.Rename(src, dst)

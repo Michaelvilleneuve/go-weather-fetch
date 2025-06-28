@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/arome"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -97,50 +98,47 @@ func setCORSHeaders(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveTilesAsPbf() {
-	for _, forecastPackage := range FORECAST_PACKAGES {
-		for _, forecastGroup := range forecastPackage.Forecasts {
-			for hour := 1; hour <= 51; hour++ {
-				// IMPORTANT: Capture des variables pour éviter les problèmes de closure
-				commonName := forecastGroup.CommonName
-				hourStr := fmt.Sprintf("%02d", hour) // Format avec zéro devant : 01, 02, etc.
+	for _, aromeLayer := range arome.Configuration().GetLayers() {
+		for hour := 1; hour <= 51; hour++ {
+			commonName := aromeLayer.CommonName
+			hourStr := fmt.Sprintf("%02d", hour) // Format avec zéro devant : 01, 02, etc.
+			
+			http.HandleFunc("/tiles/" + commonName + "/" + hourStr + "/", func(w http.ResponseWriter, r *http.Request) {
+				// Add CORS headers
+				setCORSHeaders(w, r)
+
+				filePath := "storage/" + commonName + "_" + hourStr + ".geojson.mbtiles"
 				
-				http.HandleFunc("/tiles/" + commonName + "/" + hourStr + "/", func(w http.ResponseWriter, r *http.Request) {
-					// Add CORS headers
-					setCORSHeaders(w, r)
+				// Vérifier que le fichier existe et n'est pas vide
+				if fileInfo, err := os.Stat(filePath); err != nil {
+					utils.Log("File not found: " + filePath + " - " + err.Error())
+					http.Error(w, "MBTiles file not found", http.StatusNotFound)
+					return
+				} else if fileInfo.Size() == 0 {
+					utils.Log("Empty file: " + filePath)
+					http.Error(w, "MBTiles file is empty", http.StatusInternalServerError)
+					return
+				}
+				
+				db, err := sql.Open("sqlite3", filePath)
+				if err != nil {
+					utils.Log("Error opening database: " + err.Error())
+					http.Error(w, "Failed to open MBTiles", http.StatusInternalServerError)
+					return
+				}
+				defer db.Close()
 
-					filePath := "storage/" + commonName + "_" + hourStr + ".geojson.mbtiles"
-					
-					// Vérifier que le fichier existe et n'est pas vide
-					if fileInfo, err := os.Stat(filePath); err != nil {
-						utils.Log("File not found: " + filePath + " - " + err.Error())
-						http.Error(w, "MBTiles file not found", http.StatusNotFound)
-						return
-					} else if fileInfo.Size() == 0 {
-						utils.Log("Empty file: " + filePath)
-						http.Error(w, "MBTiles file is empty", http.StatusInternalServerError)
-						return
-					}
-					
-					db, err := sql.Open("sqlite3", filePath)
-					if err != nil {
-						utils.Log("Error opening database: " + err.Error())
-						http.Error(w, "Failed to open MBTiles", http.StatusInternalServerError)
-						return
-					}
-					defer db.Close()
+				// Test de connexion et vérification des tables
+				var tableCount int
+				err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='map'").Scan(&tableCount)
+				if err != nil || tableCount == 0 {
+					utils.Log("Table 'map' not found in " + filePath)
+					http.Error(w, "Invalid MBTiles format", http.StatusInternalServerError)
+					return
+				}
 
-					// Test de connexion et vérification des tables
-					var tableCount int
-					err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='map'").Scan(&tableCount)
-					if err != nil || tableCount == 0 {
-						utils.Log("Table 'map' not found in " + filePath)
-						http.Error(w, "Invalid MBTiles format", http.StatusInternalServerError)
-						return
-					}
-
-					tileHandler(w, r, db)
-				})
-			}
+				tileHandler(w, r, db)
+			})
 		}
 	}
 }

@@ -1,0 +1,55 @@
+packages:
+  - name: SP1
+    layers:
+      - name: rainfall_accumulation
+        fields:
+          - name: tirf
+            type: float
+            unit: mm
+            description: "Total rainfall accumulation"
+      - name: cloud_cover
+        fields:
+          - name: lcc
+            type: float
+            unit: "%"
+            description: "Low cloud cover"
+          - name: mcc
+            type: float
+            unit: "%"
+            description: "Medium cloud cover"
+          - name: hcc
+            type: float
+            unit: "%"
+            description: "High cloud cover"
+  - name: SP2
+    layers:
+      - name: humidity
+        fields:
+          - name: r2
+            type: float
+            unit: "%"
+            description: "Relative humidity"
+      - name: temperature
+        fields:
+          - name: t2m
+            type: float
+            unit: °C
+            description: "Temperature"
+      - name: comfort_index
+        fields:
+          - name: r2
+            type: float
+            unit: "%"
+            description: "Relative humidity"
+          - name: t2m
+            type: float
+            unit: °C
+            description: "Temperature 2M"
+          - name: u10
+            type: float
+            unit: m/s
+            description: "Wind speed 10M"
+          - name: v10
+            type: float
+            unit: m/s
+            description: "Wind direction 10M"

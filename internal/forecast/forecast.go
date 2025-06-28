@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/arome"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/forecast/fieldshandler"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/geometry"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/grib"
@@ -17,45 +18,19 @@ import (
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
 )
 
-type ForecastGroup struct {
-	CommonName string
-	Fields []string
-}
 
-type ForecastPackage struct {
-	Package string
-	Forecasts []ForecastGroup
-}
 
 const (
 	DEFAULT_START_HOUR = 1
 	DEFAULT_END_HOUR   = 51
 )
 
-var FORECAST_PACKAGES = []ForecastPackage{
-	{
-		Package: "SP2",
-		Forecasts: []ForecastGroup{
-			{CommonName: "rainfall_accumulation", Fields: []string{"tirf"}},
-			{CommonName: "cloud_cover", Fields: []string{"lcc", "mcc", "hcc"}},
-		},
-	},
-	{
-		Package: "SP1",
-		Forecasts: []ForecastGroup{
-			{CommonName: "humidity", Fields: []string{"r2"}},
-			{CommonName: "temperature", Fields: []string{"t2m"}},
-			{CommonName: "comfort_index", Fields: []string{"r2", "t2m", "u10", "v10"}},
-		},
-	},
-}
-
 func StartFetching() {
 	var wg sync.WaitGroup
 	
-	for _, forecastPackage := range FORECAST_PACKAGES {
+	for _, forecastPackage := range arome.Configuration().Packages {
 		wg.Add(1)
-		go func(fp ForecastPackage) {
+		go func(fp arome.AromePackage) {
 			defer wg.Done()
 			processForecastPackage(fp)
 		}(forecastPackage)
@@ -66,19 +41,16 @@ func StartFetching() {
 	StartFetching()
 }
 
-// Package is like SP1 or SP2 from méteo-france
-// Each package is stored in a separate folder in data.gouv.fr
-// So we download every hour of every package
-func processForecastPackage(forecastPackage ForecastPackage) {
+func processForecastPackage(forecastPackage arome.AromePackage) {
 	run := getLatestCompleteRun(forecastPackage)
 
-	if storage.IsUpToDate(forecastPackage.Package, run) {
+	if storage.IsUpToDate(forecastPackage.Name, run) {
 		utils.Log("Forecast already downloaded, skipping " + run)
 		time.Sleep(60 * time.Second)
 		return
 	}
 
-	utils.Log("Forecast found for package " + forecastPackage.Package + " run: " + run)
+	utils.Log("Forecast found for package " + forecastPackage.Name + " run: " + run)
 
 	var hourWg sync.WaitGroup
 	hours := getAvailableHours()
@@ -88,7 +60,7 @@ func processForecastPackage(forecastPackage ForecastPackage) {
 		go func(h string) {
 			defer hourWg.Done()
 			
-			filename, err := downloadPackage(forecastPackage.Package, run, h)
+			filename, err := downloadPackage(forecastPackage.Name, run, h)
 			if err != nil {
 				utils.Log("Error getting single forecast: " + err.Error())
 				return
@@ -96,35 +68,28 @@ func processForecastPackage(forecastPackage ForecastPackage) {
 
 			utils.Log("Forecast retrieved for " + run + " " + h)
 
-			// Now we process each param (temperature, humidity) of a given package
-			processForecastGroup(filename, forecastPackage, run, h)
+			processLayers(filename, forecastPackage, run, h)
 		}(hour)
 	}
 	
 	hourWg.Wait()
 
-	// Extract common names from forecast groups
-	commonNames := make([]string, len(forecastPackage.Forecasts))
-	for i, fg := range forecastPackage.Forecasts {
-		commonNames[i] = fg.CommonName
-	}
-	
-	storage.RollOut(forecastPackage.Package, commonNames)
+	storage.RollOut([]arome.AromePackage{forecastPackage})
 }
 
-func processForecastGroup(filename string, forecastPackage ForecastPackage, run string, hour string) {
+func processLayers(filename string, forecastPackage arome.AromePackage, run string, hour string) {
 	var wg sync.WaitGroup
-	for _, forecastGroup := range forecastPackage.Forecasts {
+	for _, aromeLayer := range forecastPackage.Layers {
 		wg.Add(1)
-		go func(fg ForecastGroup) {
+		go func(layer arome.AromeLayer) {
 			defer wg.Done()
-			ProcessSingleForecast(filename, fg.CommonName, fg.Fields, run, hour)
-		}(forecastGroup)
+			processLayer(filename, layer.CommonName, layer.GetFieldsNames(), run, hour)
+		}(aromeLayer)
 	}
 	wg.Wait()
 }
 
-func ProcessSingleForecast(filename string, commonName string, fields []string, dt string, hour string) (string, error) {
+func processLayer(filename string, commonName string, fields []string, dt string, hour string) (string, error) {
 	pointsByField, err := grib.ExtractGribData(filename, fields)
 	if err != nil {
 		utils.Log("Error extracting GRIB data: " + err.Error())
@@ -265,10 +230,10 @@ func getAvailableHours() []string {
 	return hours
 }
 
-func getLatestCompleteRun(forecastPackage ForecastPackage) string {
+func getLatestCompleteRun(forecastPackage arome.AromePackage) string {
 	latestCompleteRun := ""
 	for _, run := range getAvailableRunDates() {
-		if allForecastsHoursAreAvailable(forecastPackage.Package, run) {
+		if allForecastsHoursAreAvailable(forecastPackage.Name, run) {
 			latestCompleteRun = run
 			break
 		}
