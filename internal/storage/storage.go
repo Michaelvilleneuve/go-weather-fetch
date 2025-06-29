@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -66,17 +65,16 @@ func CleanUpFiles(pattern string) {
 }
 
 
-func Save(data [][]float64, packageName string, hour string, original_time string) (string, error) {
+func Save(data [][]float64, processedFile ProcessedFile) (ProcessedFile, error) {
 	const cellSizeKm = 1.1
 	const cellHalfSizeDeg = (cellSizeKm / 2) / 111
 	const batchSize = 1000 // Process data in batches to reduce memory usage
 
-	utils.Log("Saving GeoJSON for " + packageName + " " + hour + " " + original_time)
+	utils.Log("Saving GeoJSON for " + processedFile.GetFileName())
 
-	outputFile := fmt.Sprintf("tmp/%s_%s.geojson", packageName, hour)
-	file, err := os.Create(outputFile)
+	file, err := os.Create(processedFile.GetTmpGeoJSONFilePath())
 	if err != nil {
-		return "", err
+		return processedFile, err
 	}
 	defer file.Close()
 
@@ -132,7 +130,7 @@ func Save(data [][]float64, packageName string, hour string, original_time strin
 		// Marshal and write batch
 		batchJSON, err := json.Marshal(batch)
 		if err != nil {
-			return "", err
+			return processedFile, err
 		}
 
 		// Remove the outer array brackets from batch JSON
@@ -154,47 +152,35 @@ func Save(data [][]float64, packageName string, hour string, original_time strin
 	file.WriteString(`]}`)
 	file.Sync()
 
-	return convertToMBTiles(outputFile)
+	return convertToMBTiles(processedFile)
 }
 
-func convertToMBTiles(outputFile string) (string, error) {
-	utils.Log("Tippecanoe command for " + outputFile)
+func convertToMBTiles(processedFile ProcessedFile) (ProcessedFile, error) {
+	utils.Log("Tippecanoe command for " + processedFile.GetTmpGeoJSONFilePath())
 
 	cmd := exec.Command("tippecanoe",
-		"-o", outputFile+".mbtiles",
+		"-o", processedFile.GetTmpMBTilesFilePath(),
 		"--read-parallel",
 		"--drop-densest-as-needed",
 		"--force",
-		"--minimum-zoom=7",
+		"--minimum-zoom=5",
 		"--maximum-zoom=9",
-		outputFile,
+		processedFile.GetTmpGeoJSONFilePath(),
 	)
 
 	// Capture output to debug potential issues
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		utils.Log(fmt.Sprintf("Tippecanoe error: %s\nOutput: %s", err.Error(), string(output)))
-		return "", fmt.Errorf("tippecanoe failed: %s", err)
+		return processedFile, fmt.Errorf("tippecanoe failed: %s", err)
 	}
 
-	utils.Log(fmt.Sprintf("Successfully generated %s.mbtiles", outputFile))
+	utils.Log(fmt.Sprintf("Successfully generated %s.mbtiles", processedFile.GetTmpMBTilesFilePath()))
 
 	// Remove the geojson file
-	os.Remove(outputFile)
+	os.Remove(processedFile.GetTmpGeoJSONFilePath())
 
-	return outputFile + ".mbtiles", nil
-}
-
-func IsUpToDate(packageName string, dt string) bool {
-	lastDownloaded, err := os.ReadFile(fmt.Sprintf("storage/%s_current_run_datetime.txt", packageName))
-	isUpToDate := bytes.Equal(lastDownloaded, []byte(dt))
-
-	if err != nil || !isUpToDate {
-		os.WriteFile(fmt.Sprintf("tmp/%s_current_run_datetime.txt", packageName), []byte(dt), 0644)
-		return false
-	}
-
-	return isUpToDate
+	return processedFile, nil
 }
 
 func moveFile(src, dst string) error {
