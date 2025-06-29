@@ -182,14 +182,18 @@ func (aromePackage AromePackage) ProcessLatestRun() {
 			continue
 		}
 
-		aromePackage.downloadPackage(run, hour)
+		downloadedPackage, err := aromePackage.downloadPackage(run, hour)
+		if err != nil {
+			utils.Log("Error downloading package: " + err.Error())
+			continue
+		}
 
 		utils.Log("Forecast retrieved for " + run + " " + hour)
 
-		aromePackage.processLayers()
+		downloadedPackage.processLayers()
 		aromePackage.MarkAsProcessed(run, hour)
 
-		for _, processedFile := range aromePackage.ProcessedFiles {
+		for _, processedFile := range downloadedPackage.ProcessedFiles {
 			go storage.RolloutRemotely(processedFile)
 		}
 		
