@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/forecast"
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/storage"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
 )
 
@@ -12,6 +13,7 @@ func Serve() {
 	utils.LoadEnv()
 	if os.Getenv("WORKER") != "false" || os.Getenv("SERVER") == "true" {
 		forecast.Serve()
+		storage.ReceiveRollout()
 	}
 	
 	http.HandleFunc("/up", func(w http.ResponseWriter, r *http.Request) {

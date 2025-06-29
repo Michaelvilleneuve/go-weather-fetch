@@ -15,11 +15,10 @@ func main() {
 	storage.AnticipateExit()
 	
 	if os.Getenv("WORKER") == "true" {
-		// We still need to serve the /up endpoint even thought we are a just aworker
+		// We still need to serve the /up endpoint even though we are a just aworker
 		go server.Serve()
 		forecast.StartFetching()
 	} else {
-		storage.WatchForWorkerRollout()
 		server.Serve()
 	}
 }

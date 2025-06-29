@@ -55,7 +55,7 @@ env:
     worker:
       WORKER: true
       SERVER: false
-      ROLLOUT_TARGET_HOST: michael@api.mistral.earth
+      ROLLOUT_TARGET_HOST: https://api.mistral.earth
     worker-1:
       FORECAST_START_HOUR: 1
       FORECAST_END_HOUR: 25
