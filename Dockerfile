@@ -49,8 +49,9 @@ WORKDIR /app
 COPY --from=builder /app/weather-fetch-go .
 COPY --from=builder /usr/local/bin/tippecanoe* /usr/local/bin/
 COPY --from=builder /app/config ./config
+COPY --from=builder /app/public ./public
 
-RUN mkdir /storage && chown -R appuser:appgroup /app /storage
+RUN mkdir /storage /public && chown -R appuser:appgroup /app /storage /public
 
 USER appuser
 
