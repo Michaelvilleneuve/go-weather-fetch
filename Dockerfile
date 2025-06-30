@@ -50,8 +50,7 @@ COPY --from=builder /app/weather-fetch-go .
 COPY --from=builder /usr/local/bin/tippecanoe* /usr/local/bin/
 COPY --from=builder /app/config ./config
 
-RUN mkdir /storage && chown -R appuser:appgroup /app /storage
-RUN mkdir /tmp && chown -R appuser:appgroup /tmp
+RUN mkdir /storage /tmp && chown -R appuser:appgroup /app /storage /tmp
 
 USER appuser
 
