@@ -160,6 +160,7 @@ func convertToMBTiles(processedFile ProcessedFile) (ProcessedFile, error) {
 
 	cmd := exec.Command("tippecanoe",
 		"-o", processedFile.GetTmpMBTilesFilePath(),
+		"--layer=" + processedFile.Layer + "_" + processedFile.Hour,
 		"--read-parallel",
 		"--drop-densest-as-needed",
 		"--force",
