@@ -250,7 +250,7 @@
 
         function addWeatherSource() {
             const hourStr = currentHour.toString().padStart(2, '0');
-            const tileUrl = `http://localhost:8081/tiles/${currentForecastType}/${hourStr}/{z}/{x}/{y}.pbf`;
+            const tileUrl = `http://localhost:8081/tiles/arome/${currentForecastType}/${hourStr}/{z}/{x}/{y}.pbf`;
             
             console.log('Adding weather source with URL:', tileUrl);
             
@@ -296,7 +296,7 @@
             
             // Mettre à jour la source
             map.getSource('weather-data').setTiles([
-                `http://localhost:8081/tiles/${currentForecastType}/${hourStr}/{z}/{x}/{y}.pbf`
+                `http://localhost:8081/tiles/arome/${currentForecastType}/${hourStr}/{z}/{x}/{y}.pbf`
             ]);
             
             // Supprimer les couches existantes

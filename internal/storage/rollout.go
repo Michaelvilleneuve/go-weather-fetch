@@ -16,6 +16,7 @@ import (
 
 func ReceiveRollout() {
 	http.HandleFunc("/rollout", func(w http.ResponseWriter, r *http.Request) {
+		utils.Log("Received rollout request")
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -114,6 +115,8 @@ func rolloutLocally(processedFile ProcessedFile) {
 func RolloutRemotely(processedFile ProcessedFile) {
 	targetHost := os.Getenv("ROLLOUT_TARGET_HOST")
 	rolloutSecret := os.Getenv("ROLLOUT_SECRET")
+
+	utils.Log("Rolling out remotely " + targetHost + " " + processedFile.GetTmpMBTilesFilePath())
 
 	file, err := os.Open(processedFile.GetTmpMBTilesFilePath())
 	if err != nil {

@@ -47,7 +47,7 @@ env:
   clear:
     PORT: 80
     DEBUG: false
-    TOTAL_AROME_HOURS: 51
+    TOTAL_HOURS: 51
   tags:
     server:
       WORKER: false

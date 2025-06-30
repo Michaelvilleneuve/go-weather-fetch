@@ -175,7 +175,7 @@ func convertToMBTiles(processedFile ProcessedFile) (ProcessedFile, error) {
 		return processedFile, fmt.Errorf("tippecanoe failed: %s", err)
 	}
 
-	utils.Log(fmt.Sprintf("Successfully generated %s.mbtiles", processedFile.GetTmpMBTilesFilePath()))
+	utils.Log(fmt.Sprintf("Successfully generated %s", processedFile.GetTmpMBTilesFilePath()))
 
 	// Remove the geojson file
 	os.Remove(processedFile.GetTmpGeoJSONFilePath())

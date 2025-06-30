@@ -5,17 +5,20 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/arome"
+	"github.com/Michaelvilleneuve/weather-fetch-go/internal/storage"
 	"github.com/Michaelvilleneuve/weather-fetch-go/internal/utils"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 func Serve() {
-	serveTilesAsPbf()
+	serveAromeTilesAsPbf()
 	http.HandleFunc("/metadata.json", metadataHandler)
 }
 
@@ -24,38 +27,58 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	w.WriteHeader(http.StatusOK)
-	// Read the current run datetime from storage
-	content, err := os.ReadFile("storage/SP1_current_run_datetime.txt")
-	if err != nil {
-		utils.Log("Error reading current run datetime: " + err.Error())
-		w.Write([]byte(`{"run_hour": ""}`))
+	model := r.URL.Query().Get("model")
+	if model == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error": "Model is required"}`))
 		return
+	}
+	
+	w.WriteHeader(http.StatusOK)
+
+	mostRecentReleasedRun := getMostRecentReleasedRun(model)
+	parsedTime, err := time.Parse("2006-01-02T15:04:05Z", mostRecentReleasedRun)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "Failed to parse time"}`))
+		return
+	}
+	mostRecentReleasedRunStartHour := parsedTime.Add(time.Hour * 2).Format("2006-01-02T15:04:05Z")
+		
+	w.Write([]byte(fmt.Sprintf(`{"run_hour": "%s", "start_hour": "%s"}`, mostRecentReleasedRun, mostRecentReleasedRunStartHour,)))
+}
+
+func getMostRecentReleasedRun(model string) string {
+	files, _ := filepath.Glob(fmt.Sprintf("storage/%s_*.mbtiles", model))
+
+	processedFiles := []storage.ProcessedFile{}
+	for _, file := range files {
+		processedFiles = append(processedFiles, storage.ProcessedFile{
+			Model: model,
+			Run: strings.Split(file, "_")[1],
+			Layer: strings.Split(file, "_")[2],
+			Hour: strings.Split(file, "_")[3],
+		})
 	}
 
-	// Trim any whitespace and write the datetime
-	datetime := strings.TrimSpace(string(content))
-	parsedDatetime, err := time.Parse("2006-01-02T15:04:05Z", datetime)
-	if err != nil {
-		utils.Log("Error parsing datetime: " + err.Error())
-		w.Write([]byte(`{"run_hour": ""}`))
-		return
-	}
-	datetimeStartHour := parsedDatetime.Add(time.Hour * 1).Format("2006-01-02T15:04:05Z")
-	w.Write([]byte(fmt.Sprintf(`{"run_hour": "%s", "start_hour": "%s"}`, datetime, datetimeStartHour)))
+	sort.Slice(processedFiles, func(i, j int) bool {
+		return processedFiles[i].Run > processedFiles[j].Run
+	})
+
+	return processedFiles[0].Run
 }
 
 func tileHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
-	// URL: /tiles/{forecast_group}/{hour}/{z}/{x}/{y}.pbf
+	// URL: /tiles/model/{forecast_group}/{hour}/{z}/{x}/{y}.pbf
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 5 {
 		http.Error(w, "Invalid tile path", http.StatusBadRequest)
 		return
 	}
 	
-	z, _ := strconv.Atoi(parts[4])
-	x, _ := strconv.Atoi(parts[5])
-	yParts := strings.Split(parts[6], ".")
+	z, _ := strconv.Atoi(parts[5])
+	x, _ := strconv.Atoi(parts[6])
+	yParts := strings.Split(parts[7], ".")
 	y, _ := strconv.Atoi(yParts[0])
 	
 	// Flip Y for TMS
@@ -97,17 +120,17 @@ func setCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func serveTilesAsPbf() {
+func serveAromeTilesAsPbf() {
 	for _, aromeLayer := range arome.Configuration().GetLayers() {
 		for hour := 1; hour <= 51; hour++ {
 			commonName := aromeLayer.CommonName
 			hourStr := fmt.Sprintf("%02d", hour) // Format avec zéro devant : 01, 02, etc.
 			
-			http.HandleFunc("/tiles/" + commonName + "/" + hourStr + "/", func(w http.ResponseWriter, r *http.Request) {
+			http.HandleFunc("/tiles/arome/" + commonName + "/" + hourStr + "/", func(w http.ResponseWriter, r *http.Request) {
 				// Add CORS headers
 				setCORSHeaders(w, r)
 
-				filePath := "storage/" + commonName + "_" + hourStr + ".geojson.mbtiles"
+				filePath := "storage/arome_" + getMostRecentReleasedRun("arome") + "_" + commonName + "_" + hourStr + ".mbtiles"
 				
 				// Vérifier que le fichier existe et n'est pas vide
 				if fileInfo, err := os.Stat(filePath); err != nil {

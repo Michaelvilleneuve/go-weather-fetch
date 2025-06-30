@@ -244,7 +244,7 @@ func (aromePackage AromePackage) downloadPackage(dt string, hour string) (AromeP
 	return aromePackage, nil
 }
 
-func (aromePackage AromePackage) processLayers() {
+func (aromePackage *AromePackage) processLayers() {
 	var wg sync.WaitGroup
 	for _, aromeLayer := range aromePackage.Layers {
 		wg.Add(1)
@@ -258,7 +258,7 @@ func (aromePackage AromePackage) processLayers() {
 
 
 
-func (aromePackage AromePackage) processLayer(layer AromeLayer) (string, error) {
+func (aromePackage *AromePackage) processLayer(layer AromeLayer) (string, error) {
 	pointsByField, err := grib.ExtractGribData(*aromePackage.GribFileName, layer.GetFieldsNames())
 	if err != nil {
 		utils.Log("Error extracting GRIB data: " + err.Error())
