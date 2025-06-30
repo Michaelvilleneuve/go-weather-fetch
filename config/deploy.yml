@@ -8,7 +8,6 @@ image: michaelvilleneuve33/mistral-earth-api
 servers:
   web:
     - api.mistral.earth: [ server ]
-    - api.mistral.earth: [ worker worker-1 ]
   # job:
   #   hosts:
   #     - 192.168.0.1
