@@ -43,6 +43,8 @@ builder:
 # Inject ENV variables into containers (secrets come from .kamal/secrets).
 #
 env:
+  secret:
+    - ROLLOUT_SECRET
   clear:
     PORT: 80
     DEBUG: false
