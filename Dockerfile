@@ -51,8 +51,6 @@ COPY --from=builder /usr/local/bin/tippecanoe* /usr/local/bin/
 COPY --from=builder /app/config ./config
 COPY --from=builder /app/public ./public
 
-RUN mkdir /storage /public && chown -R appuser:appgroup /app /storage /public
-
 USER appuser
 
 EXPOSE ${PORT:-80}
