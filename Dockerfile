@@ -42,7 +42,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g 1001 appgroup && \
-    useradd -u 1001 -g appgroup -s /bin/bash -m appuser
+    useradd -u 1001 -g appgroup -s /bin/bash -m 1000
 
 WORKDIR /app
 
@@ -51,11 +51,7 @@ COPY --from=builder /usr/local/bin/tippecanoe* /usr/local/bin/
 COPY --from=builder /app/config ./config
 COPY --from=builder /app/public ./public
 
-RUN mkdir -p /app/storage /app/tmp && \
-    chown -R appuser:appgroup /app/storage /app/tmp && \
-    chmod 755 /app/storage /app/tmp
-
-USER appuser
+USER 1000:1000
 
 EXPOSE ${PORT:-80}
 
