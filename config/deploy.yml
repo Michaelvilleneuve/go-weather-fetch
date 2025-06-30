@@ -48,7 +48,7 @@ env:
   clear:
     PORT: 80
     DEBUG: false
-    TOTAL_HOURS: 51
+    TOTAL_HOURS: 5
   tags:
     server:
       WORKER: false
