@@ -51,7 +51,8 @@ COPY --from=builder /usr/local/bin/tippecanoe* /usr/local/bin/
 COPY --from=builder /app/config ./config
 COPY --from=builder /app/public ./public
 
-RUN chown -R appuser:appgroup /app/storage /app/tmp && \
+RUN mkdir -p /app/storage /app/tmp && \
+    chown -R appuser:appgroup /app/storage /app/tmp && \
     chmod 755 /app/storage /app/tmp
 
 USER appuser
