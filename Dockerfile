@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     git \
     openssh-client \
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Tippecanoe from source
