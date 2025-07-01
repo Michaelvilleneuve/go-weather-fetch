@@ -210,7 +210,7 @@
 
         function addWeatherSource() {
             const hourStr = currentHour.toString().padStart(2, '0');
-            const tileUrl = `http://localhost:8081/tiles/arome/${currentForecastType}/${hourStr}/{z}/{x}/{y}.pbf`;
+            const tileUrl = `https://api.mistral.earth/tiles/arome/${currentForecastType}/${hourStr}/{z}/{x}/{y}.pbf`;
             
             console.log('Adding weather source with URL:', tileUrl);
             
@@ -251,7 +251,7 @@
             const config = forecastConfigs[currentForecastType];
             
             map.getSource('weather-data').setTiles([
-                `http://localhost:8081/tiles/arome/${currentForecastType}/${hourStr}/{z}/{x}/{y}.pbf`
+                `https://api.mistral.earth/tiles/arome/${currentForecastType}/${hourStr}/{z}/{x}/{y}.pbf`
             ]);
             
             if (map.getLayer('weather-layer')) {
