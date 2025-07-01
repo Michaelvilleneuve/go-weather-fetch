@@ -21,13 +21,13 @@
         <div class="control-group">
             <label for="opacity-slider">Opacity:</label>
             <input type="range" id="opacity-slider" min="0" max="100" value="70">
-            <span id="opacity-display">70%</span>
+            <span id="opacity-display">90%</span>
         </div>
         
         <div class="control-group">
             <label for="pitch-slider">3D View Angle:</label>
-            <input type="range" id="pitch-slider" min="0" max="60" value="45">
-            <span id="pitch-display">45°</span>
+            <input type="range" id="pitch-slider" min="0" max="60" value="15">
+            <span id="pitch-display">15°</span>
         </div>
         
         <div class="control-group">
@@ -100,10 +100,10 @@
         const map = new mapboxgl.Map({
             container: 'map',
             style: 'mapbox://styles/mapbox/satellite-v9',
-            center: [0.5, 38.5],
-            zoom: 8,
+            center: [2.8948, 42.6886],
+            zoom: 7.3,
             minZoom: 7.3,
-            pitch: 45,
+            pitch: 15,
             bearing: 0,
             antialias: false,
             accessToken: 'pk.eyJ1IjoibWljaGFlbHZpbGxlbmV1dmUiLCJhIjoiY201MHlqZ2h2MXpmaDJqcXc3cHNka2xmeiJ9.aam0u_YExa5to859TlZCyg'
@@ -241,7 +241,7 @@
                 'source-layer': sourceLayerName,
                 paint: {
                     'fill-color': colorExpression,
-                    'fill-opacity': 0.7
+                    'fill-opacity': 0.9
                 }
             });
         }
