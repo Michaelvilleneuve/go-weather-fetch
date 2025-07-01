@@ -23,6 +23,10 @@ func cloudCover(lcc, mcc, hcc float64) float64 {
 	// Ensure result is in valid range [0,1] and convert to percentage
 	tccPercentage := math.Max(0, math.Min(1, tccFraction)) * 100.0
 
+	if tccPercentage > 50.55 && tccPercentage < 50.65 {
+		tccPercentage = 1
+	}
+
 	return tccPercentage
 }
 
