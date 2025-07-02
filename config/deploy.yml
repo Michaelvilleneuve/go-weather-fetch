@@ -48,6 +48,7 @@ env:
   clear:
     PORT: 80
     DEBUG: false
+    HOST_ORIGIN: https://mistral.earth
     TOTAL_HOURS: 5
   tags:
     server:
