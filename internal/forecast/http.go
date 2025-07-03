@@ -45,7 +45,7 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	mostRecentReleasedRunStartHour := parsedTime.Add(time.Hour * 2).Format("2006-01-02T15:04:05Z")
 		
-	w.Write([]byte(fmt.Sprintf(`{"run_hour": "%s", "start_hour": "%s"}`, mostRecentReleasedRun, mostRecentReleasedRunStartHour,)))
+	w.Write([]byte(fmt.Sprintf(`{"run_hour": "%s", "start_hour": "%s", "palettes": %s}`, mostRecentReleasedRun, mostRecentReleasedRunStartHour, storage.GetPaletteAsJSON())))
 }
 
 func getMostRecentReleasedRun(model string) string {
