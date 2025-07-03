@@ -134,7 +134,19 @@ var palettes = map[string]Palette{
 		Icon:        "cloud_cover.svg",
 		Unit:        "%",
 		ShowPalette: false,
-		Colors:      []ColorPoint{}, // Generated dynamically
+		Colors:      []ColorPoint{
+			{Value: 0, Color: "rgba(255,255,255, 0)"},
+			{Value: 10, Color: "rgba(255,255,255, 0.1)"},
+			{Value: 20, Color: "rgba(255,255,255, 0.2)"},
+			{Value: 30, Color: "rgba(255,255,255, 0.3)"},
+			{Value: 40, Color: "rgba(255,255,255, 0.4)"},
+			{Value: 50, Color: "rgba(255,255,255, 0.5)"},
+			{Value: 60, Color: "rgba(255,255,255, 0.6)"},
+			{Value: 70, Color: "rgba(255,255,255, 0.7)"},
+			{Value: 80, Color: "rgba(255,255,255, 0.8)"},
+			{Value: 90, Color: "rgba(255,255,255, 0.9)"},
+			{Value: 100, Color: "rgba(255,255,255, 1)"},
+		}, // Generated dynamically
 	},
 }
 

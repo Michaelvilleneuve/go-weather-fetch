@@ -12,8 +12,8 @@ import (
 )
 
 func Save(data [][]float64, processedFile ProcessedFile) (ProcessedFile, error) {
-	saveAsRaster(data, processedFile)
-	return saveAsVector(data, processedFile)
+	return saveAsRaster(data, processedFile)
+	// return saveAsVector(data, processedFile)
 }
 
 func AnticipateExit() {

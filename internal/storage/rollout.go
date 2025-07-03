@@ -29,21 +29,22 @@ func ReceiveRollout() {
 
 		processedFile := ProcessedFile{
 			Model: r.FormValue("model"),
+			Format: r.FormValue("format"),
 			Run: r.FormValue("run"), 
 			Layer: r.FormValue("layer"),
 			Hour: r.FormValue("hour"),
 		}
 
-		// Read the mbtiles file from the request body
-		file, _, err := r.FormFile("mbtiles")
+		// Read the file from the request body
+		file, _, err := r.FormFile("file")
 		if err != nil {
-			utils.Log("Error receiving mbtiles file: " + err.Error())
+			utils.Log("Error receiving file: " + err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		defer file.Close()
 
-		dst, err := os.Create(processedFile.GetRolledOutMBTilesFileName())
+		dst, err := os.Create(processedFile.GetFinalRolledOutFilePath())
 		if err != nil {
 			utils.Log("Error creating destination file: " + err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -54,7 +55,7 @@ func ReceiveRollout() {
 		// Copy the uploaded file to storage
 		_, err = io.Copy(dst, file)
 		if err != nil {
-			utils.Log("Error saving mbtiles file: " + err.Error())
+			utils.Log("Error saving file: " + err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -62,12 +63,12 @@ func ReceiveRollout() {
 		rollOutIfRunIsComplete(processedFile)
 
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte("Mbtiles file received and saved"))
+		w.Write([]byte("File received and saved"))
 	})
 }
 
 func rollOutIfRunIsComplete(processedFile ProcessedFile) {
-	files, err := filepath.Glob(fmt.Sprintf("tmp/%s_%s_*.mbtiles", processedFile.Model, processedFile.Run))
+	files, err := filepath.Glob(fmt.Sprintf("tmp/%s_%s_*.*", processedFile.Model, processedFile.Run))
 	if err != nil {
 		utils.Log("Error during globbing: " + err.Error())
 		return
@@ -116,9 +117,9 @@ func RolloutRemotely(processedFile ProcessedFile) {
 	targetHost := os.Getenv("ROLLOUT_TARGET_HOST")
 	rolloutSecret := os.Getenv("ROLLOUT_SECRET")
 
-	utils.Log("Rolling out remotely " + targetHost + " " + processedFile.GetTmpMBTilesFilePath())
+	utils.Log("Rolling out remotely " + targetHost + " " + processedFile.GetFinalTmpFilePath())
 
-	file, err := os.Open(processedFile.GetTmpMBTilesFilePath())
+	file, err := os.Open(processedFile.GetFinalTmpFilePath())
 	if err != nil {
 		utils.Log("Error opening file: " + err.Error())
 		return
@@ -130,10 +131,11 @@ func RolloutRemotely(processedFile ProcessedFile) {
 
 	writer.WriteField("model", processedFile.Model)
 	writer.WriteField("run", processedFile.Run)
+	writer.WriteField("format", processedFile.Format)
 	writer.WriteField("layer", processedFile.Layer)
 	writer.WriteField("hour", processedFile.Hour)
 
-	part, err := writer.CreateFormFile("mbtiles", filepath.Base(processedFile.GetTmpMBTilesFilePath()))
+	part, err := writer.CreateFormFile("file", filepath.Base(processedFile.GetFinalTmpFilePath()))
 	if err != nil {
 		utils.Log("Error creating form file: " + err.Error())
 		return
@@ -173,5 +175,5 @@ func RolloutRemotely(processedFile ProcessedFile) {
 		return
 	}
 
-	utils.Log(fmt.Sprintf("Successfully uploaded %s", processedFile.GetTmpMBTilesFilePath()))
+	utils.Log(fmt.Sprintf("Successfully uploaded %s", processedFile.GetFinalTmpFilePath()))
 }

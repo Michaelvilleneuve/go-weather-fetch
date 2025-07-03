@@ -18,6 +18,7 @@ import (
 )
 
 func Serve() {
+	serveCOGTiles()
 	serveAromeTilesAsPbf()
 	http.HandleFunc("/metadata.json", metadataHandler)
 }
@@ -33,10 +34,15 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"error": "Model is required"}`))
 		return
 	}
+
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "mbtiles"
+	}
 	
 	w.WriteHeader(http.StatusOK)
 
-	mostRecentReleasedRun := getMostRecentReleasedRun(model)
+	mostRecentReleasedRun := getMostRecentReleasedRun(model, format)
 	parsedTime, err := time.Parse("2006-01-02T15:04:05Z", mostRecentReleasedRun)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -48,8 +54,8 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf(`{"run_hour": "%s", "start_hour": "%s", "palettes": %s}`, mostRecentReleasedRun, mostRecentReleasedRunStartHour, storage.GetPaletteAsJSON())))
 }
 
-func getMostRecentReleasedRun(model string) string {
-	files, _ := filepath.Glob(fmt.Sprintf("storage/%s_*.mbtiles", model))
+func getMostRecentReleasedRun(model string, format string) string {
+	files, _ := filepath.Glob(fmt.Sprintf("storage/%s_*.%s", model, format))
 
 	processedFiles := []storage.ProcessedFile{}
 	for _, file := range files {
@@ -58,6 +64,7 @@ func getMostRecentReleasedRun(model string) string {
 			Run: strings.Split(file, "_")[1],
 			Layer: strings.Split(file, "_")[2],
 			Hour: strings.Split(file, "_")[3],
+			Format: format,
 		})
 	}
 
@@ -130,7 +137,7 @@ func serveAromeTilesAsPbf() {
 				// Add CORS headers
 				setCORSHeaders(w, r)
 
-				filePath := "storage/arome_" + getMostRecentReleasedRun("arome") + "_" + commonName + "_" + hourStr + ".mbtiles"
+				filePath := "storage/arome_" + getMostRecentReleasedRun("arome", "mbtiles") + "_" + commonName + "_" + hourStr + ".mbtiles"
 				
 				// Vérifier que le fichier existe et n'est pas vide
 				if fileInfo, err := os.Stat(filePath); err != nil {

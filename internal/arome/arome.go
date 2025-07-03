@@ -275,6 +275,8 @@ func (aromePackage *AromePackage) processLayer(layer AromeLayer) (string, error)
 		coordinateMap = fieldshandler.ProcessComfortIndex(pointsByField)
 	case "temperature":
 		coordinateMap = fieldshandler.ProcessTemperatureForecast(pointsByField)
+	case "humidity":
+		coordinateMap = fieldshandler.ProcessHumidityForecast(pointsByField)
 	default:
 		coordinateMap = fieldshandler.ProcessDefaultForecast(pointsByField)
 	}
