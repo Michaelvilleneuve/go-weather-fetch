@@ -20,18 +20,17 @@ func ProcessTemperatureForecast(pointsByField map[string][]geometry.GeoPoint) ma
 			if point.Value < 9999 {
 				value = point.Value
 			}
-			
-			if existingPoint, exists := coordinateMap[coordKey]; exists {
-				// Sum the values if coordinate already exists
-				existingPoint.Value += value
-				coordinateMap[coordKey] = existingPoint
-			} else {
-				// Create new point entry
-				coordinateMap[coordKey] = geometry.GeoPoint{
-					Lat:   math.Round(point.Lat*1000)/1000,
-					Lon:   math.Round(point.Lon*1000)/1000,
-					Value: value - 273.15, // Convert Kelvin to Celsius
-				}
+
+			valueInCelsius := value - 273.15
+
+			if (valueInCelsius < -70) {
+				continue
+			}
+
+			coordinateMap[coordKey] = geometry.GeoPoint{
+				Lat:   math.Round(point.Lat*1000)/1000,
+				Lon:   math.Round(point.Lon*1000)/1000,
+				Value: valueInCelsius, // Convert Kelvin to Celsius
 			}
 		}
 	}
