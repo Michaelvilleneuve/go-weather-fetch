@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestComfortIndex(t *testing.T) {
+func TestApparentTemperature(t *testing.T) {
 	testCases := []struct {
 		name     string
 		t2m      float64
@@ -20,7 +20,7 @@ func TestComfortIndex(t *testing.T) {
 			u10:      2,
 			v10:      2,
 			r2:       50,
-			expected: 5.87,
+			expected: 17.87, // Expected apparent temperature in °C
 		},
 		{
 			name:     "Cold conditions",
@@ -28,7 +28,7 @@ func TestComfortIndex(t *testing.T) {
 			u10:      5,
 			v10:      0,
 			r2:       60,
-			expected: 2.76,
+			expected: -6.29, // Expected apparent temperature in °C
 		},
 		{
 			name:     "Hot and humid conditions",
@@ -36,7 +36,7 @@ func TestComfortIndex(t *testing.T) {
 			u10:      1,
 			v10:      1,
 			r2:       80,
-			expected: 9.33,
+			expected: 44.80, // Expected apparent temperature in °C
 		},
 		{
 			name:     "Extreme cold",
@@ -44,7 +44,7 @@ func TestComfortIndex(t *testing.T) {
 			u10:      10,
 			v10:      10,
 			r2:       50,
-			expected: 1.0,
+			expected: -33.69, // Expected apparent temperature in °C
 		},
 		{
 			name:     "Extreme hot",
@@ -52,7 +52,7 @@ func TestComfortIndex(t *testing.T) {
 			u10:      0,
 			v10:      0,
 			r2:       90,
-			expected: 10.0,
+			expected: 57.82, // Expected apparent temperature in °C
 		},
 		{
 			name:     "Invalid t2m low",
@@ -60,7 +60,7 @@ func TestComfortIndex(t *testing.T) {
 			u10:      0,
 			v10:      0,
 			r2:       50,
-			expected: 5.0,
+			expected: -74.15, // Returns actual temperature in °C
 		},
 		{
 			name:     "Invalid t2m high",
@@ -68,7 +68,7 @@ func TestComfortIndex(t *testing.T) {
 			u10:      0,
 			v10:      0,
 			r2:       50,
-			expected: 5.0,
+			expected: 77.85, // Returns actual temperature in °C
 		},
 		{
 			name:     "Invalid r2 low",
@@ -76,7 +76,7 @@ func TestComfortIndex(t *testing.T) {
 			u10:      0,
 			v10:      0,
 			r2:       -1,
-			expected: 5.0,
+			expected: 20.0, // Returns actual temperature in °C
 		},
 		{
 			name:     "Invalid r2 high",
@@ -84,7 +84,7 @@ func TestComfortIndex(t *testing.T) {
 			u10:      0,
 			v10:      0,
 			r2:       101,
-			expected: 5.0,
+			expected: 20.0, // Returns actual temperature in °C
 		},
 		{
 			name:     "Invalid u10",
@@ -92,7 +92,7 @@ func TestComfortIndex(t *testing.T) {
 			u10:      101,
 			v10:      0,
 			r2:       50,
-			expected: 5.0,
+			expected: 20.0, // Returns actual temperature in °C
 		},
 		{
 			name:     "Invalid v10",
@@ -100,7 +100,7 @@ func TestComfortIndex(t *testing.T) {
 			u10:      0,
 			v10:      -101,
 			r2:       50,
-			expected: 5.0,
+			expected: 20.0, // Returns actual temperature in °C
 		},
 		{
 			name:     "Zero wind",
@@ -108,15 +108,15 @@ func TestComfortIndex(t *testing.T) {
 			u10:      0,
 			v10:      0,
 			r2:       50,
-			expected: 6.12,
+			expected: 19.85, // Expected apparent temperature in °C
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := comfortIndex(tc.t2m, tc.u10, tc.v10, tc.r2)
+			result := apparentTemperature(tc.t2m, tc.u10, tc.v10, tc.r2)
 			if math.Abs(result-tc.expected) > 0.01 { // Using a tolerance for float comparison
-				t.Errorf("comfortIndex(%f, %f, %f, %f) = %f; want %f", tc.t2m, tc.u10, tc.v10, tc.r2, result, tc.expected)
+				t.Errorf("apparentTemperature(%f, %f, %f, %f) = %f; want %f", tc.t2m, tc.u10, tc.v10, tc.r2, result, tc.expected)
 			}
 		})
 	}

@@ -13,7 +13,6 @@ import (
 
 func Save(data [][]float64, processedFile ProcessedFile) (ProcessedFile, error) {
 	return saveAsRaster(data, processedFile)
-	// return saveAsVector(data, processedFile)
 }
 
 func AnticipateExit() {

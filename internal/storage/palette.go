@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image/color"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,17 +27,21 @@ var palettes = map[string]Palette{
 	"comfort_index": {
 		Name:        "comfort_index",
 		Icon:        "temperature.svg",
-		Unit:        "",
+		Unit:        "°C",
 		ShowPalette: true,
 		Colors: []ColorPoint{
-			{Value: 1, Color: "#0000FF"},
-			{Value: 3, Color: "#ADD8E6"},
-			{Value: 4, Color: "#90EE90"},
-			{Value: 5, Color: "#FFFFE0"},
-			{Value: 6, Color: "#FFD700"},
-			{Value: 7, Color: "#FFA500"},
-			{Value: 9, Color: "#FF0000"},
-			{Value: 10, Color: "#8B0000"},
+			{Value: -40, Color: "#000080"},  // Très froid - bleu foncé
+			{Value: -20, Color: "#0000FF"},  // Froid extrême - bleu
+			{Value: -10, Color: "#4169E1"},  // Froid - bleu royal
+			{Value: 0, Color: "#ADD8E6"},    // Frais - bleu clair
+			{Value: 10, Color: "#90EE90"},   // Doux - vert clair
+			{Value: 15, Color: "#FFFFE0"},   // Neutre - jaune très clair
+			{Value: 20, Color: "#FFD700"},   // Agréable - jaune doré
+			{Value: 25, Color: "#FFA500"},   // Chaud - orange
+			{Value: 30, Color: "#FF4500"},   // Très chaud - rouge-orange
+			{Value: 35, Color: "#FF0000"},   // Chaud intense - rouge
+			{Value: 45, Color: "#8B0000"},   // Chaleur extrême - rouge foncé
+			{Value: 60, Color: "#4B0000"},   // Chaleur dangereuse - rouge très foncé
 		},
 	},
 	"rainfall_accumulation": {
@@ -45,9 +50,34 @@ var palettes = map[string]Palette{
 		Unit:        "mm",
 		ShowPalette: true,
 		Colors: []ColorPoint{
-			{Value: 0, Color: "rgba(255,255,255, 0.2)"},
-			{Value: 0.1, Color: "rgba(255,255,255, 0.5)"},
-			{Value: 0.2, Color: "rgba(255,255,255, 0.8)"},
+			{Value: 0, Color: "rgba(255,255,255, 0)"},
+			{Value: 0.01, Color: "rgba(255,255,255, 0.01)"},
+			{Value: 0.02, Color: "rgba(255,255,255, 0.02)"},
+			{Value: 0.03, Color: "rgba(255,255,255, 0.03)"},
+			{Value: 0.04, Color: "rgba(255,255,255, 0.04)"},
+			{Value: 0.05, Color: "rgba(255,255,255, 0.05)"},
+			{Value: 0.06, Color: "rgba(255,255,255, 0.06)"},
+			{Value: 0.07, Color: "rgba(255,255,255, 0.07)"},
+			{Value: 0.08, Color: "rgba(255,255,255, 0.08)"},
+			{Value: 0.09, Color: "rgba(255,255,255, 0.09)"},
+			{Value: 0.1, Color: "rgba(255,255,255, 0.2)"},
+			{Value: 0.11, Color: "rgba(255,255,255, 0.23)"},
+			{Value: 0.12, Color: "rgba(255,255,255, 0.26)"},
+			{Value: 0.13, Color: "rgba(255,255,255, 0.29)"},
+			{Value: 0.14, Color: "rgba(255,255,255, 0.32)"},
+			{Value: 0.15, Color: "rgba(255,255,255, 0.35)"},
+			{Value: 0.16, Color: "rgba(255,255,255, 0.38)"},
+			{Value: 0.17, Color: "rgba(255,255,255, 0.41)"},
+			{Value: 0.18, Color: "rgba(255,255,255, 0.44)"},
+			{Value: 0.19, Color: "rgba(255,255,255, 0.47)"},
+			{Value: 0.2, Color: "rgba(255,255,255, 0.50)"},
+			{Value: 0.21, Color: "rgba(255,255,255, 0.53)"},
+			{Value: 0.22, Color: "rgba(255,255,255, 0.56)"},
+			{Value: 0.23, Color: "rgba(255,255,255, 0.59)"},
+			{Value: 0.24, Color: "rgba(255,255,255, 0.62)"},
+			{Value: 0.25, Color: "rgba(255,255,255, 0.65)"},
+			{Value: 0.26, Color: "rgba(255,255,255, 0.68)"},
+			{Value: 0.27, Color: "rgba(255,255,255, 0.71)"},
 			{Value: 0.35, Color: "#e1f2fc"},
 			{Value: 0.5, Color: "#5fd4f4"},
 			{Value: 0.75, Color: "#45c2f0"},
@@ -102,13 +132,18 @@ var palettes = map[string]Palette{
 		Unit:        "°C",
 		ShowPalette: true,
 		Colors: []ColorPoint{
-			{Value: -20.0, Color: "#00008b"},
-			{Value: 0.0, Color: "#add8e6"},
-			{Value: 5.0, Color: "#90EE90"},
-			{Value: 6.0, Color: "#ffffe0"},
-			{Value: 28.0, Color: "#ff6600"},
-			{Value: 36.0, Color: "#cc0000"},
-			{Value: 50.0, Color: "#1a0000"},
+			{Value: -40, Color: "#000080"},  // Très froid - bleu foncé
+			{Value: -20, Color: "#0000FF"},  // Froid extrême - bleu
+			{Value: -10, Color: "#4169E1"},  // Froid - bleu royal
+			{Value: 0, Color: "#ADD8E6"},    // Frais - bleu clair
+			{Value: 10, Color: "#90EE90"},   // Doux - vert clair
+			{Value: 15, Color: "#FFFFE0"},   // Neutre - jaune très clair
+			{Value: 20, Color: "#FFD700"},   // Agréable - jaune doré
+			{Value: 25, Color: "#FFA500"},   // Chaud - orange
+			{Value: 30, Color: "#FF4500"},   // Très chaud - rouge-orange
+			{Value: 35, Color: "#FF0000"},   // Chaud intense - rouge
+			{Value: 45, Color: "#8B0000"},   // Chaleur extrême - rouge foncé
+			{Value: 60, Color: "#4B0000"},   // Chaleur dangereuse - rouge très foncé
 		},
 	},
 	"humidity": {
@@ -136,17 +171,19 @@ var palettes = map[string]Palette{
 		ShowPalette: false,
 		Colors:      []ColorPoint{
 			{Value: 0, Color: "rgba(255,255,255, 0)"},
-			{Value: 10, Color: "rgba(255,255,255, 0.1)"},
-			{Value: 20, Color: "rgba(255,255,255, 0.2)"},
-			{Value: 30, Color: "rgba(255,255,255, 0.3)"},
-			{Value: 40, Color: "rgba(255,255,255, 0.4)"},
-			{Value: 50, Color: "rgba(255,255,255, 0.5)"},
-			{Value: 60, Color: "rgba(255,255,255, 0.6)"},
-			{Value: 70, Color: "rgba(255,255,255, 0.7)"},
-			{Value: 80, Color: "rgba(255,255,255, 0.8)"},
-			{Value: 90, Color: "rgba(255,255,255, 0.9)"},
-			{Value: 100, Color: "rgba(255,255,255, 1)"},
-		}, // Generated dynamically
+			{Value: 1, Color: "rgba(255,255,255, 0.01)"},
+			{Value: 5, Color: "rgba(255,255,255, 0.02)"},
+			{Value: 10, Color: "rgba(255,255,255, 0.05)"},
+			{Value: 20, Color: "rgba(255,255,255, 0.10)"},
+			{Value: 30, Color: "rgba(255,255,255, 0.17)"},
+			{Value: 40, Color: "rgba(255,255,255, 0.25)"},
+			{Value: 50, Color: "rgba(255,255,255, 0.33)"},
+			{Value: 60, Color: "rgba(255,255,255, 0.41)"},
+			{Value: 70, Color: "rgba(255,255,255, 0.5)"},
+			{Value: 80, Color: "rgba(255,255,255, 0.58)"},
+			{Value: 90, Color: "rgba(255,255,255, 0.66)"},
+			{Value: 100, Color: "rgba(255,255,255, 0.95)"},
+		},
 	},
 }
 
@@ -307,4 +344,245 @@ func GetPaletteAsJSON() string {
 		return "{}"
 	}
 	return string(b)
+}
+
+func GetValueFromColor(layer string, color string) float64 {
+	palette, ok := palettes[layer]
+	if !ok {
+		return 0
+	}
+
+	colors := palette.Colors
+	if len(colors) == 0 {
+		return 0
+	}
+
+	// Sort colors by value to ensure correct interpolation
+	sort.Slice(colors, func(i, j int) bool {
+		return colors[i].Value < colors[j].Value
+	})
+
+	// Parse the input color
+	inputColor, err := parseColor(color)
+	if err != nil {
+		return 0
+	}
+
+	// Check for exact matches first
+	for _, colorPoint := range colors {
+		paletteColor, err := parseColor(colorPoint.Color)
+		if err != nil {
+			continue
+		}
+		if inputColor.R == paletteColor.R && inputColor.G == paletteColor.G && 
+		   inputColor.B == paletteColor.B && inputColor.A == paletteColor.A {
+			return colorPoint.Value
+		}
+	}
+
+	// Find the best interpolation match
+	bestInterpolation := -1
+	bestFactor := 0.0
+	minInterpolationError := math.MaxFloat64
+	
+	for i := 0; i < len(colors)-1; i++ {
+		p1 := colors[i]
+		p2 := colors[i+1]
+		
+		c1, err1 := parseColor(p1.Color)
+		c2, err2 := parseColor(p2.Color)
+		
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		
+		// Calculate the best interpolation factor for this color pair
+		factor := calculateBestInterpolationFactor(inputColor, c1, c2)
+		
+		// Generate the interpolated color at this factor
+		interpolatedColor := interpolateColor(c1, c2, factor)
+		
+		// Calculate how close this interpolated color is to our input color
+		error := colorDistance(inputColor, interpolatedColor)
+		
+		// If this is the best match so far, remember it
+		if error < minInterpolationError {
+			minInterpolationError = error
+			bestInterpolation = i
+			bestFactor = factor
+		}
+	}
+	
+	// If we found a good interpolation match, return the interpolated value
+	if bestInterpolation >= 0 && minInterpolationError < 50 { // Reasonable threshold
+		p1 := colors[bestInterpolation]
+		p2 := colors[bestInterpolation+1]
+		
+		// Clamp factor to [0, 1] range for extrapolation control
+		if bestFactor < 0 {
+			bestFactor = 0
+		}
+		if bestFactor > 1 {
+			bestFactor = 1
+		}
+		
+		return p1.Value + bestFactor*(p2.Value-p1.Value)
+	}
+	
+	// Fallback to closest single color match
+	minDistance := math.MaxFloat64
+	bestValue := 0.0
+	
+	for _, colorPoint := range colors {
+		paletteColor, err := parseColor(colorPoint.Color)
+		if err != nil {
+			continue
+		}
+		
+		distance := colorDistance(inputColor, paletteColor)
+		if distance < minDistance {
+			minDistance = distance
+			bestValue = colorPoint.Value
+		}
+	}
+	
+	return bestValue
+}
+
+// calculateBestInterpolationFactor calculates the best interpolation factor to match a target color
+func calculateBestInterpolationFactor(targetColor, c1, c2 color.RGBA) float64 {
+	// Calculate interpolation factors for each color component
+	factors := make([]float64, 0, 4)
+	
+	// Red component
+	if c2.R != c1.R {
+		factor := float64(targetColor.R-c1.R) / float64(c2.R-c1.R)
+		factors = append(factors, factor)
+	}
+	
+	// Green component
+	if c2.G != c1.G {
+		factor := float64(targetColor.G-c1.G) / float64(c2.G-c1.G)
+		factors = append(factors, factor)
+	}
+	
+	// Blue component
+	if c2.B != c1.B {
+		factor := float64(targetColor.B-c1.B) / float64(c2.B-c1.B)
+		factors = append(factors, factor)
+	}
+	
+	// Alpha component
+	if c2.A != c1.A {
+		factor := float64(targetColor.A-c1.A) / float64(c2.A-c1.A)
+		factors = append(factors, factor)
+	}
+	
+	// If no components differ, return 0 (colors are identical)
+	if len(factors) == 0 {
+		return 0.0
+	}
+	
+	// Calculate weighted average, giving more weight to components with larger differences
+	totalWeight := 0.0
+	weightedSum := 0.0
+	
+	weights := []float64{
+		math.Abs(float64(c2.R - c1.R)),
+		math.Abs(float64(c2.G - c1.G)),
+		math.Abs(float64(c2.B - c1.B)),
+		math.Abs(float64(c2.A - c1.A)),
+	}
+	
+	factorIndex := 0
+	for _, weight := range weights {
+		if weight > 0 {
+			if factorIndex < len(factors) {
+				weightedSum += factors[factorIndex] * weight
+				totalWeight += weight
+				factorIndex++
+			}
+		}
+	}
+	
+	if totalWeight == 0 {
+		return 0.0
+	}
+	
+	return weightedSum / totalWeight
+}
+
+// isColorBetween checks if a color could be an interpolation between two colors
+func isColorBetween(color, c1, c2 color.RGBA) bool {
+	// Check if color components are within the range of c1 and c2
+	rInRange := (color.R >= min(c1.R, c2.R) && color.R <= max(c1.R, c2.R)) ||
+		(c1.R == c2.R && color.R == c1.R)
+	gInRange := (color.G >= min(c1.G, c2.G) && color.G <= max(c1.G, c2.G)) ||
+		(c1.G == c2.G && color.G == c1.G)
+	bInRange := (color.B >= min(c1.B, c2.B) && color.B <= max(c1.B, c2.B)) ||
+		(c1.B == c2.B && color.B == c1.B)
+	aInRange := (color.A >= min(c1.A, c2.A) && color.A <= max(c1.A, c2.A)) ||
+		(c1.A == c2.A && color.A == c1.A)
+	
+	return rInRange && gInRange && bInRange && aInRange
+}
+
+// getInterpolationFactor calculates the interpolation factor for a color between two colors
+func getInterpolationFactor(color, c1, c2 color.RGBA) float64 {
+	// Use the component with the largest difference to calculate the factor
+	maxDiff := 0.0
+	factor := 0.0
+	
+	if diff := math.Abs(float64(c2.R) - float64(c1.R)); diff > maxDiff {
+		maxDiff = diff
+		if diff > 0 {
+			factor = (float64(color.R) - float64(c1.R)) / diff
+		}
+	}
+	if diff := math.Abs(float64(c2.G) - float64(c1.G)); diff > maxDiff {
+		maxDiff = diff
+		if diff > 0 {
+			factor = (float64(color.G) - float64(c1.G)) / diff
+		}
+	}
+	if diff := math.Abs(float64(c2.B) - float64(c1.B)); diff > maxDiff {
+		maxDiff = diff
+		if diff > 0 {
+			factor = (float64(color.B) - float64(c1.B)) / diff
+		}
+	}
+	if diff := math.Abs(float64(c2.A) - float64(c1.A)); diff > maxDiff {
+		maxDiff = diff
+		if diff > 0 {
+			factor = (float64(color.A) - float64(c1.A)) / diff
+		}
+	}
+	
+	return factor
+}
+
+// colorDistance calculates the Euclidean distance between two colors
+func colorDistance(c1, c2 color.RGBA) float64 {
+	dr := float64(c1.R) - float64(c2.R)
+	dg := float64(c1.G) - float64(c2.G)
+	db := float64(c1.B) - float64(c2.B)
+	da := float64(c1.A) - float64(c2.A)
+	
+	return math.Sqrt(dr*dr + dg*dg + db*db + da*da)
+}
+
+// min returns the minimum of two uint8 values
+func min(a, b uint8) uint8 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// max returns the maximum of two uint8 values
+func max(a, b uint8) uint8 {
+	if a > b {
+		return a
+	}
+	return b
 }

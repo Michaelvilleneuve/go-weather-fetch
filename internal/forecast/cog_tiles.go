@@ -35,8 +35,8 @@ var (
 	tileCache = &TileCache{
 		tiles: make(map[string]CachedTile),
 	}
-	// Cache tiles for 30 minutes
-	tileCacheDuration = 30 * time.Minute
+	// Cache tiles for 60 minutes
+	tileCacheDuration = 60 * time.Minute
 )
 
 func serveCOGTiles() {
@@ -82,6 +82,8 @@ func handleCOGTileRequest(w http.ResponseWriter, r *http.Request, layer, hour st
 		http.Error(w, "Invalid tile path", http.StatusBadRequest)
 		return
 	}
+
+	layer = parts[3]
 	
 	z, err := strconv.Atoi(parts[5])
 	if err != nil {
@@ -96,7 +98,7 @@ func handleCOGTileRequest(w http.ResponseWriter, r *http.Request, layer, hour st
 	}
 	
 	yParts := strings.Split(parts[7], ".")
-	if len(yParts) < 2 || yParts[1] != "png" {
+	if len(yParts) < 2 || (yParts[1] != "png" && yParts[1] != "json") {
 		http.Error(w, "Invalid y coordinate or file extension", http.StatusBadRequest)
 		return
 	}
@@ -113,6 +115,19 @@ func handleCOGTileRequest(w http.ResponseWriter, r *http.Request, layer, hour st
 		http.Error(w, "COG file not found", http.StatusNotFound)
 		return
 	}
+
+	if yParts[1] == "json" {
+		jsonData, err := extractJSONDataFromCOG(cogFile, layer, z, x, y)
+		if err != nil {
+			http.Error(w, "Failed to generate JSON data" + err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Header().Set("X-Cache", "HIT")
+		w.Write(jsonData)
+		return
+	}
 	
 	// Check cache first
 	cacheKey := fmt.Sprintf("%s:%d:%d:%d", cogFile, z, x, y)
@@ -124,7 +139,7 @@ func handleCOGTileRequest(w http.ResponseWriter, r *http.Request, layer, hour st
 		return
 	}
 	
-	// Generate PNG tile from COG
+	// Generate PNG tile from COG using optimized gdalwarp
 	pngData, err := extractPNGTileFromCOG(cogFile, z, x, y)
 	if err != nil {
 		utils.Log("Error extracting PNG tile: " + err.Error())
@@ -206,171 +221,33 @@ func extractPNGTileFromCOG(cogFile string, z, x, y int) ([]byte, error) {
 	// Calculate Web Mercator bounds for the tile
 	bounds := tileToWebMercatorBounds(z, x, y)
 	
-	// Get COG file resolution information
-	cogInfo, err := getCOGInfo(cogFile)
-	if err != nil {
-		utils.Log("Warning: Could not get COG info, using default tile size: " + err.Error())
-		// Fallback to original behavior
-		return extractPNGTileWithFixedSizeOptimized(cogFile, bounds)
-	}
-	
-	// Calculate appropriate output size based on zoom level and native resolution
-	outputWidth, outputHeight := calculateOptimalTileSize(bounds, cogInfo, z)
-	
-	// Choose resampling method based on zoom level
-	resamplingMethod := "cubic"
-	if z > 10 {
-		// At high zoom levels, use nearest neighbor to preserve individual pixels
-		resamplingMethod = "near"
-	}
-	
-	// Use optimized gdalwarp with memory output
-	return extractPNGTileInMemory(cogFile, bounds, outputWidth, outputHeight, resamplingMethod)
-}
-
-func extractPNGTileInMemory(cogFile string, bounds TileBounds, outputWidth, outputHeight int, resamplingMethod string) ([]byte, error) {
-	// Use gdalwarp with direct stdout output for better performance
-	cmd := exec.Command("gdalwarp",
+	// Use gdal_translate to extract RGBA bands and create PNG tile in one command
+	cmd := exec.Command("gdal_translate",
 		"-of", "PNG",
-		"-dstalpha", // Add alpha band to output
-		"-te", 
-		fmt.Sprintf("%.10f", bounds.minX), // xmin
-		fmt.Sprintf("%.10f", bounds.minY), // ymin
-		fmt.Sprintf("%.10f", bounds.maxX), // xmax
-		fmt.Sprintf("%.10f", bounds.maxY), // ymax
-		"-te_srs", "EPSG:3857", // Target extent coordinates are in Web Mercator
-		"-t_srs", "EPSG:3857",  // Output in Web Mercator
-		"-ts", fmt.Sprintf("%d", outputWidth), fmt.Sprintf("%d", outputHeight), // Dynamic tile size
-		"-r", resamplingMethod, // Dynamic resampling method
-		"-co", "WORLDFILE=NO", // Don't create world file
-		"-dstnodata", "0", // Set transparent pixels to 0
-		"-multi", // Use multiple threads
-		"-wo", "NUM_THREADS=ALL_CPUS", // Use all available CPUs
-		"-ovr", "NONE", // Don't use overviews for small tiles
+		"-b", "1", "-b", "2", "-b", "3", "-b", "4", // Only RGBA bands, skip band 5 (value)
+		"-projwin", 
+		fmt.Sprintf("%.10f", bounds.minX), // ulx (upper left x)
+		fmt.Sprintf("%.10f", bounds.maxY), // uly (upper left y) 
+		fmt.Sprintf("%.10f", bounds.maxX), // lrx (lower right x)
+		fmt.Sprintf("%.10f", bounds.minY), // lry (lower right y)
+		"-projwin_srs", "EPSG:3857", // Projection window coordinates are in Web Mercator
+		"-outsize", "256", "256",    // Output size 256x256
+		"-r", "cubic",               // Cubic resampling
+		"-co", "WORLDFILE=NO",       // Don't create world file
+		"-q",                        // Quiet mode
 		cogFile,
-		"/vsistdout/", // Output directly to stdout
+		"/vsistdout/",               // Output to stdout
+	)
+
+	// Set environment variables for better performance
+	cmd.Env = append(os.Environ(),
+		"GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR",
+		"GDAL_TIFF_INTERNAL_MASK=YES",
 	)
 	
 	pngData, err := cmd.Output()
 	if err != nil {
-		// Fallback to temporary file approach if stdout fails
-		return extractPNGTileWithTempFile(cogFile, bounds, outputWidth, outputHeight, resamplingMethod)
-	}
-	
-	return pngData, nil
-}
-
-func extractPNGTileWithTempFile(cogFile string, bounds TileBounds, outputWidth, outputHeight int, resamplingMethod string) ([]byte, error) {
-	// Create a temporary file with better naming
-	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("tile_%d_%d_%d_%d.png", time.Now().UnixNano(), outputWidth, outputHeight, os.Getpid()))
-	defer func() {
-		// Ensure cleanup even if there's an error
-		os.Remove(tmpFile)
-	}()
-	
-	// Use gdalwarp with optimized parameters
-	cmd := exec.Command("gdalwarp",
-		"-of", "PNG",
-		"-dstalpha", // Add alpha band to output
-		"-te", 
-		fmt.Sprintf("%.10f", bounds.minX), // xmin
-		fmt.Sprintf("%.10f", bounds.minY), // ymin
-		fmt.Sprintf("%.10f", bounds.maxX), // xmax
-		fmt.Sprintf("%.10f", bounds.maxY), // ymax
-		"-te_srs", "EPSG:3857", // Target extent coordinates are in Web Mercator
-		"-t_srs", "EPSG:3857",  // Output in Web Mercator
-		"-ts", fmt.Sprintf("%d", outputWidth), fmt.Sprintf("%d", outputHeight), // Dynamic tile size
-		"-r", resamplingMethod, // Dynamic resampling method
-		"-co", "WORLDFILE=NO", // Don't create world file
-		"-dstnodata", "0", // Set transparent pixels to 0
-		"-multi", // Use multiple threads
-		"-wo", "NUM_THREADS=ALL_CPUS", // Use all available CPUs
-		"-ovr", "NONE", // Don't use overviews for small tiles
-		"-q", // Quiet mode for better performance
-		cogFile,
-		tmpFile,
-	)
-	
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("gdalwarp failed: %s\nOutput: %s", err, string(output))
-	}
-	
-	// Read the generated PNG file
-	pngData, err := os.ReadFile(tmpFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read generated PNG: %s", err)
-	}
-	
-	return pngData, nil
-}
-
-func extractPNGTileWithFixedSizeOptimized(cogFile string, bounds TileBounds) ([]byte, error) {
-	// Optimized fallback function with direct stdout
-	cmd := exec.Command("gdalwarp",
-		"-of", "PNG",
-		"-dstalpha", // Add alpha band to output
-		"-te", 
-		fmt.Sprintf("%.10f", bounds.minX),
-		fmt.Sprintf("%.10f", bounds.minY),
-		fmt.Sprintf("%.10f", bounds.maxX),
-		fmt.Sprintf("%.10f", bounds.maxY),
-		"-te_srs", "EPSG:3857",
-		"-t_srs", "EPSG:3857",
-		"-ts", "256", "256",
-		"-r", "cubic",
-		"-co", "WORLDFILE=NO", // Don't create world file
-		"-dstnodata", "0", // Set transparent pixels to 0
-		"-multi", // Use multiple threads
-		"-wo", "NUM_THREADS=ALL_CPUS", // Use all available CPUs
-		"-q", // Quiet mode for better performance
-		cogFile,
-		"/vsistdout/", // Output directly to stdout
-	)
-	
-	pngData, err := cmd.Output()
-	if err != nil {
-		// Fallback to temporary file if stdout fails
-		return extractPNGTileWithTempFileFallback(cogFile, bounds)
-	}
-	
-	return pngData, nil
-}
-
-func extractPNGTileWithTempFileFallback(cogFile string, bounds TileBounds) ([]byte, error) {
-	// Final fallback with temporary file
-	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("tile_fallback_%d_%d.png", time.Now().UnixNano(), os.Getpid()))
-	defer os.Remove(tmpFile)
-	
-	cmd := exec.Command("gdalwarp",
-		"-of", "PNG",
-		"-dstalpha", // Add alpha band to output
-		"-te", 
-		fmt.Sprintf("%.10f", bounds.minX),
-		fmt.Sprintf("%.10f", bounds.minY),
-		fmt.Sprintf("%.10f", bounds.maxX),
-		fmt.Sprintf("%.10f", bounds.maxY),
-		"-te_srs", "EPSG:3857",
-		"-t_srs", "EPSG:3857",
-		"-ts", "256", "256",
-		"-r", "cubic",
-		"-co", "WORLDFILE=NO", // Don't create world file
-		"-dstnodata", "0", // Set transparent pixels to 0
-		"-multi", // Use multiple threads
-		"-wo", "NUM_THREADS=ALL_CPUS", // Use all available CPUs
-		"-q", // Quiet mode
-		cogFile,
-		tmpFile,
-	)
-	
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("gdalwarp failed: %s\nOutput: %s", err, string(output))
-	}
-	
-	pngData, err := os.ReadFile(tmpFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read PNG from temp file: %s", err)
+		return nil, fmt.Errorf("failed to generate PNG tile: %s", err)
 	}
 	
 	return pngData, nil
@@ -389,106 +266,6 @@ type GDALInfo struct {
 	GeoTransform []float64           `json:"geoTransform"`
 	Bands        []map[string]interface{} `json:"bands"`
 	CornerCoordinates map[string][]float64 `json:"cornerCoordinates"`
-}
-
-func getCOGInfo(cogFile string) (*COGInfo, error) {
-	// Use gdalinfo to get COG file information
-	cmd := exec.Command("gdalinfo", "-json", cogFile)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("gdalinfo failed: %s", err)
-	}
-	
-	// Parse the JSON output
-	var gdalInfo GDALInfo
-	err = json.Unmarshal(output, &gdalInfo)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse gdalinfo JSON: %s", err)
-	}
-	
-	// Extract basic information
-	if len(gdalInfo.Size) != 2 {
-		return nil, fmt.Errorf("invalid size information in COG file")
-	}
-	
-	width := gdalInfo.Size[0]
-	height := gdalInfo.Size[1]
-	
-	// Extract pixel size from geotransform
-	// GeoTransform format: [originX, pixelWidth, 0, originY, 0, pixelHeight]
-	var pixelSizeX, pixelSizeY float64 = 0.01, 0.01 // defaults
-	if len(gdalInfo.GeoTransform) == 6 {
-		pixelSizeX = math.Abs(gdalInfo.GeoTransform[1])
-		pixelSizeY = math.Abs(gdalInfo.GeoTransform[5])
-	}
-	
-	// Extract corner coordinates
-	var minX, minY, maxX, maxY float64
-	if upperLeft, ok := gdalInfo.CornerCoordinates["upperLeft"]; ok && len(upperLeft) == 2 {
-		minX = upperLeft[0]
-		maxY = upperLeft[1]
-	}
-	if lowerRight, ok := gdalInfo.CornerCoordinates["lowerRight"]; ok && len(lowerRight) == 2 {
-		maxX = lowerRight[0]
-		minY = lowerRight[1]
-	}
-	
-	return &COGInfo{
-		Width: width,
-		Height: height,
-		PixelSizeX: pixelSizeX,
-		PixelSizeY: pixelSizeY,
-		MinX: minX,
-		MinY: minY,
-		MaxX: maxX,
-		MaxY: maxY,
-	}, nil
-}
-
-func calculateOptimalTileSize(bounds TileBounds, cogInfo *COGInfo, zoom int) (int, int) {
-	// For Web Mercator to WGS84 coordinate conversion
-	// Web Mercator bounds are in meters, need to convert to degrees
-	
-	// Convert Web Mercator bounds to latitude/longitude
-	minLon := bounds.minX * 180.0 / (math.Pi * 6378137.0)
-	maxLon := bounds.maxX * 180.0 / (math.Pi * 6378137.0)
-	
-	// For latitude, the conversion is more complex due to Mercator projection
-	minLat := math.Atan(math.Sinh(bounds.minY / 6378137.0)) * 180.0 / math.Pi
-	maxLat := math.Atan(math.Sinh(bounds.maxY / 6378137.0)) * 180.0 / math.Pi
-	
-	// Calculate the geographic extent of the tile
-	tileWidthDegrees := maxLon - minLon
-	tileHeightDegrees := maxLat - minLat
-	
-	// Calculate how many native pixels would fit in this tile
-	nativePixelsX := int(math.Abs(tileWidthDegrees / cogInfo.PixelSizeX))
-	nativePixelsY := int(math.Abs(tileHeightDegrees / cogInfo.PixelSizeY))
-	
-	// At high zoom levels (>10), try to preserve native resolution
-	if zoom > 10 {
-		// Ensure we don't create tiles that are too large (max 1024x1024)
-		maxSize := 1024
-		if nativePixelsX > maxSize {
-			nativePixelsX = maxSize
-		}
-		if nativePixelsY > maxSize {
-			nativePixelsY = maxSize
-		}
-		
-		// Ensure minimum size (at least 64x64)
-		if nativePixelsX < 64 {
-			nativePixelsX = 64
-		}
-		if nativePixelsY < 64 {
-			nativePixelsY = 64
-		}
-		
-		return nativePixelsX, nativePixelsY
-	}
-	
-	// For lower zoom levels, use standard 256x256
-	return 256, 256
 }
 
 type TileBounds struct {
@@ -515,4 +292,52 @@ func tileToWebMercatorBounds(z, x, y int) TileBounds {
 		maxX: maxX,
 		maxY: maxY,
 	}
-} 
+}
+
+func extractJSONDataFromCOG(cogFile string, layer string, z, x, y int) ([]byte, error) {
+	// Calculate Web Mercator bounds for the tile
+	bounds := tileToWebMercatorBounds(z, x, y)
+
+	// Calculate center coordinates of the tile
+	centerX := (bounds.minX + bounds.maxX) / 2
+	centerY := (bounds.minY + bounds.maxY) / 2
+
+	// Use gdallocationinfo WITHOUT -geoloc flag, using projected coordinates
+	cmd := exec.Command("gdallocationinfo", 
+		"-valonly",
+		"-b", "5", // Read from band 5 (value band)
+		"-l_srs", "EPSG:3857", // Specify that input coordinates are in Web Mercator
+		cogFile,
+		fmt.Sprintf("%.10f", centerX),
+		fmt.Sprintf("%.10f", centerY),
+	)
+
+	// Set environment variables for better performance
+	cmd.Env = append(os.Environ(),
+		"GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR",
+	)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get value from COG: %s", err)
+	}
+
+	// Parse the value from output
+	valueStr := strings.TrimSpace(string(output))
+	weatherValue, err := strconv.ParseFloat(valueStr, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse value: %s", err)
+	}
+
+	// Create JSON response
+	response := map[string]interface{}{
+		"value": weatherValue,
+	}
+
+	jsonData, err := json.Marshal(response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal JSON: %s", err)
+	}
+
+	return jsonData, nil
+}

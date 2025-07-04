@@ -49,7 +49,7 @@ func createColorizedGeoTIFF(data [][]float64, processedFile ProcessedFile) error
 	gridInfo := calculateGridInfo(data, bounds)
 
 	// Create RGBA grids with colorization (including alpha channel)
-	rGrid, gGrid, bGrid, aGrid := createColorizedRasterGrids(data, gridInfo, bounds, processedFile.Layer)
+	rGrid, gGrid, bGrid, aGrid, valueGrid := createColorizedRasterGrids(data, gridInfo, bounds, processedFile.Layer)
 
 	// Create separate GeoTIFF files for each RGBA band
 	err := createSingleBandGeoTIFF(rGrid, processedFile.GetTmpRGBGeoTIFFPath("r"), gridInfo, bounds)
@@ -72,20 +72,26 @@ func createColorizedGeoTIFF(data [][]float64, processedFile ProcessedFile) error
 		return fmt.Errorf("error creating alpha band GeoTIFF: %v", err)
 	}
 
+	err = createSingleBandGeoTIFF(valueGrid, processedFile.GetTmpRGBGeoTIFFPath("value"), gridInfo, bounds)
+	if err != nil {
+		return fmt.Errorf("error creating value band GeoTIFF: %v", err)
+	}
+
 	// Create VRT file to combine RGBA bands
 	err = createVRTFile(processedFile, gridInfo, bounds)
 	if err != nil {
 		return err
 	}
 
-	// Convert VRT to final RGBA GeoTIFF with alpha channel
+	// Convert VRT to final GeoTIFF with all bands (RGBA + Value)
 	cmd := exec.Command("gdal_translate",
 		"-of", "GTiff",
 		"-co", "COMPRESS=LZW",
 		"-co", "TILED=YES",
 		"-co", "BLOCKXSIZE=64",
 		"-co", "BLOCKYSIZE=64",
-		"-co", "PHOTOMETRIC=RGB",
+		// Remove PHOTOMETRIC=RGB to allow extra bands
+		// "-co", "PHOTOMETRIC=RGB",
 		"-co", "ALPHA=YES", // Enable alpha channel
 		processedFile.GetTmpVRTFilePath(),
 		processedFile.GetTmpGeoTIFFFilePath(),
@@ -96,13 +102,13 @@ func createColorizedGeoTIFF(data [][]float64, processedFile ProcessedFile) error
 		return fmt.Errorf("gdal_translate failed: %s\nOutput: %s", err, string(output))
 	}
 
-	// Clean up temporary files
+	// Clean up temporary files (including the value band file now that VRT is processed)
 	os.Remove(processedFile.GetTmpVRTFilePath())
 	os.Remove(processedFile.GetTmpRGBGeoTIFFPath("r"))
 	os.Remove(processedFile.GetTmpRGBGeoTIFFPath("g"))
 	os.Remove(processedFile.GetTmpRGBGeoTIFFPath("b"))
 	os.Remove(processedFile.GetTmpRGBGeoTIFFPath("a"))
-
+	os.Remove(processedFile.GetTmpRGBGeoTIFFPath("value"))
 	return nil
 }
 
@@ -123,24 +129,41 @@ func createSingleBandGeoTIFF(grid []float32, filepath string, gridInfo GridInfo,
 	fmt.Fprintf(file, "cellsize      %.6f\n", gridInfo.PixelSizeX)
 	fmt.Fprintf(file, "NODATA_value  -1\n")
 
+	// Determine if this is a value band based on filename
+	isValueBand := strings.Contains(filepath, "_value.tif")
+	
 	// Write grid data
 	for row := 0; row < gridInfo.Height; row++ {
 		var rowValues []string
 		for col := 0; col < gridInfo.Width; col++ {
 			index := row*gridInfo.Width + col
 			value := grid[index]
-			rowValues = append(rowValues, fmt.Sprintf("%.0f", value))
+			if isValueBand {
+				// Use higher precision for value bands
+				rowValues = append(rowValues, fmt.Sprintf("%.3f", value))
+			} else {
+				// Use integer precision for RGBA bands
+				rowValues = append(rowValues, fmt.Sprintf("%.0f", value))
+			}
 		}
 		fmt.Fprintf(file, "%s\n", strings.Join(rowValues, " "))
 	}
 	file.Close()
+
+	// Determine data type for gdal_translate
+	var outputType string
+	if isValueBand {
+		outputType = "Float32"
+	} else {
+		outputType = "Byte"
+	}
 
 	// Convert ASCII to GeoTIFF
 	cmd := exec.Command("gdal_translate",
 		"-of", "GTiff",
 		"-co", "COMPRESS=LZW",
 		"-a_srs", "EPSG:4326",
-		"-ot", "Byte",
+		"-ot", outputType,
 		asciiPath,
 		filepath,
 	)
@@ -166,6 +189,7 @@ func createVRTFile(processedFile ProcessedFile, gridInfo GridInfo, bounds Bounds
 	gFileName := processedFile.GetFileName() + "_g.tif"
 	bFileName := processedFile.GetFileName() + "_b.tif"
 	aFileName := processedFile.GetFileName() + "_a.tif"
+	valueFileName := processedFile.GetFileName() + "_value.tif"
 
 	vrtContent := fmt.Sprintf(`<VRTDataset rasterXSize="%d" rasterYSize="%d">
   <SRS>EPSG:4326</SRS>
@@ -210,6 +234,16 @@ func createVRTFile(processedFile ProcessedFile, gridInfo GridInfo, bounds Bounds
       <DstRect xOff="0" yOff="0" xSize="%d" ySize="%d"/>
     </SimpleSource>
   </VRTRasterBand>
+  <VRTRasterBand dataType="Float32" band="5">
+    <Description>Value</Description>
+    <SimpleSource>
+      <SourceFilename relativeToVRT="1">%s</SourceFilename>
+      <SourceBand>1</SourceBand>
+      <SourceProperties RasterXSize="%d" RasterYSize="%d" DataType="Float32"/>
+      <SrcRect xOff="0" yOff="0" xSize="%d" ySize="%d"/>
+      <DstRect xOff="0" yOff="0" xSize="%d" ySize="%d"/>
+    </SimpleSource>
+  </VRTRasterBand>
 </VRTDataset>`,
 		gridInfo.Width, gridInfo.Height,
 		bounds.MinLon, gridInfo.PixelSizeX, bounds.MaxLat, -gridInfo.PixelSizeY,
@@ -230,6 +264,11 @@ func createVRTFile(processedFile ProcessedFile, gridInfo GridInfo, bounds Bounds
 		gridInfo.Width, gridInfo.Height,
 		// Alpha band
 		aFileName,
+		gridInfo.Width, gridInfo.Height,
+		gridInfo.Width, gridInfo.Height,
+		gridInfo.Width, gridInfo.Height,
+		// Value band
+		valueFileName,
 		gridInfo.Width, gridInfo.Height,
 		gridInfo.Width, gridInfo.Height,
 		gridInfo.Width, gridInfo.Height,
@@ -375,12 +414,13 @@ func calculateGridInfo(data [][]float64, bounds Bounds) GridInfo {
 	}
 }
 
-func createColorizedRasterGrids(data [][]float64, gridInfo GridInfo, bounds Bounds, layer string) ([]float32, []float32, []float32, []float32) {
+func createColorizedRasterGrids(data [][]float64, gridInfo GridInfo, bounds Bounds, layer string) ([]float32, []float32, []float32, []float32, []float32) {
 	// Initialize grids with transparent values
 	rGrid := make([]float32, gridInfo.Width*gridInfo.Height)
 	gGrid := make([]float32, gridInfo.Width*gridInfo.Height)
 	bGrid := make([]float32, gridInfo.Width*gridInfo.Height)
 	aGrid := make([]float32, gridInfo.Width*gridInfo.Height)
+	valueGrid := make([]float32, gridInfo.Width*gridInfo.Height)
 
 	// Initialize with transparent background
 	for i := range rGrid {
@@ -388,6 +428,7 @@ func createColorizedRasterGrids(data [][]float64, gridInfo GridInfo, bounds Boun
 		gGrid[i] = 0
 		bGrid[i] = 0
 		aGrid[i] = 0
+		valueGrid[i] = 0
 	}
 
 	// Populate grids with colorized data points
@@ -417,10 +458,11 @@ func createColorizedRasterGrids(data [][]float64, gridInfo GridInfo, bounds Boun
 			gGrid[index] = float32(rgba.G)
 			bGrid[index] = float32(rgba.B)
 			aGrid[index] = float32(rgba.A)
+			valueGrid[index] = float32(value)
 		}
 	}
 
-	return rGrid, gGrid, bGrid, aGrid
+	return rGrid, gGrid, bGrid, aGrid, valueGrid
 }
 
 // shouldBeTransparent determines if a color should be rendered as transparent
