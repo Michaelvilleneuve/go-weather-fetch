@@ -21,23 +21,29 @@ import (
 
 // TileCache holds cached PNG tiles
 type TileCache struct {
-	mu    sync.RWMutex
-	tiles map[string]CachedTile
+	mu sync.RWMutex
 }
 
 type CachedTile struct {
-	data      []byte
+	filePath  string
 	timestamp time.Time
 	fileHash  string
 }
 
 var (
-	tileCache = &TileCache{
-		tiles: make(map[string]CachedTile),
-	}
+	tileCache = &TileCache{}
 	// Cache tiles for 60 minutes
-	tileCacheDuration = 60 * time.Minute
+	tileCacheDuration = 180 * time.Minute
+	// Directory for cached tiles
+	tileCacheDir = "storage/tile_cache"
 )
+
+func init() {
+	// Ensure cache directory exists
+	if err := os.MkdirAll(tileCacheDir, 0755); err != nil {
+		utils.Log("Error creating tile cache directory: " + err.Error())
+	}
+}
 
 func serveCOGTiles() {
 	// Start cache cleanup routine
@@ -65,11 +71,22 @@ func cleanupTileCache() {
 	for range ticker.C {
 		tileCache.mu.Lock()
 		now := time.Now()
-		for key, tile := range tileCache.tiles {
-			if now.Sub(tile.timestamp) > tileCacheDuration {
-				delete(tileCache.tiles, key)
+		
+		// Walk through cache directory and remove expired files
+		filepath.Walk(tileCacheDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
 			}
-		}
+			
+			if !info.IsDir() && strings.HasSuffix(path, ".png") {
+				if now.Sub(info.ModTime()) > tileCacheDuration {
+					os.Remove(path)
+					utils.Log("Removed expired cache file: " + path)
+				}
+			}
+			return nil
+		})
+		
 		tileCache.mu.Unlock()
 	}
 }
@@ -161,29 +178,73 @@ func getCachedTile(cacheKey, cogFile string) []byte {
 	tileCache.mu.RLock()
 	defer tileCache.mu.RUnlock()
 	
-	if tile, exists := tileCache.tiles[cacheKey]; exists {
-		// Check if the COG file has been modified since caching
-		if fileInfo, err := os.Stat(cogFile); err == nil {
-			currentHash := getFileHash(cogFile, fileInfo.ModTime())
-			if tile.fileHash == currentHash && time.Since(tile.timestamp) < tileCacheDuration {
-				return tile.data
+	cacheFilePath := getCacheFilePath(cacheKey)
+	
+	// Check if cache file exists
+	if fileInfo, err := os.Stat(cacheFilePath); err == nil {
+		// Check if cache is still valid
+		if time.Since(fileInfo.ModTime()) < tileCacheDuration {
+			// Check if the COG file has been modified since caching
+			if cogInfo, err := os.Stat(cogFile); err == nil {
+				currentHash := getFileHash(cogFile, cogInfo.ModTime())
+				
+				// Read the stored hash from a companion file
+				hashFile := cacheFilePath + ".hash"
+				if hashData, err := os.ReadFile(hashFile); err == nil {
+					storedHash := strings.TrimSpace(string(hashData))
+					if storedHash == currentHash {
+						// Cache is valid, read and return the PNG data
+						if pngData, err := os.ReadFile(cacheFilePath); err == nil {
+							return pngData
+						}
+					}
+				}
 			}
 		}
+		
+		// Cache is expired or invalid, remove files
+		os.Remove(cacheFilePath)
+		os.Remove(cacheFilePath + ".hash")
 	}
+	
 	return nil
 }
 
 func setCachedTile(cacheKey string, data []byte, cogFile string) {
+	tileCache.mu.Lock()
+	defer tileCache.mu.Unlock()
+	
+	cacheFilePath := getCacheFilePath(cacheKey)
+	
+	// Ensure the directory exists
+	if err := os.MkdirAll(filepath.Dir(cacheFilePath), 0755); err != nil {
+		utils.Log("Error creating cache directory: " + err.Error())
+		return
+	}
+	
+	// Write PNG data to cache file
+	if err := os.WriteFile(cacheFilePath, data, 0644); err != nil {
+		utils.Log("Error writing cache file: " + err.Error())
+		return
+	}
+	
+	// Store the COG file hash in a companion file
 	if fileInfo, err := os.Stat(cogFile); err == nil {
-		tileCache.mu.Lock()
-		defer tileCache.mu.Unlock()
-		
-		tileCache.tiles[cacheKey] = CachedTile{
-			data:      data,
-			timestamp: time.Now(),
-			fileHash:  getFileHash(cogFile, fileInfo.ModTime()),
+		fileHash := getFileHash(cogFile, fileInfo.ModTime())
+		hashFile := cacheFilePath + ".hash"
+		if err := os.WriteFile(hashFile, []byte(fileHash), 0644); err != nil {
+			utils.Log("Error writing hash file: " + err.Error())
 		}
 	}
+}
+
+func getCacheFilePath(cacheKey string) string {
+	// Create a safe filename from the cache key
+	hasher := md5.New()
+	hasher.Write([]byte(cacheKey))
+	filename := hex.EncodeToString(hasher.Sum(nil)) + ".png"
+	
+	return filepath.Join(tileCacheDir, filename)
 }
 
 func getFileHash(filepath string, modTime time.Time) string {

@@ -62,6 +62,8 @@ func ReceiveRollout() {
 
 		rollOutIfRunIsComplete(processedFile)
 
+		PreCacheTiles(processedFile)
+
 		w.WriteHeader(http.StatusCreated)
 		w.Write([]byte("File received and saved"))
 	})

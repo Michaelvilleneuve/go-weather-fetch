@@ -44,6 +44,30 @@ var palettes = map[string]Palette{
 			{Value: 60, Color: "#4B0000"},   // Chaleur dangereuse - rouge très foncé
 		},
 	},
+	"wind_speed": {
+		Name:        "wind_speed",
+		Icon:        "wind.svg",
+		Unit:        "m/s",
+		ShowPalette: true,
+		Colors: []ColorPoint{
+			{Value: 0, Color: "rgba(255,255,255,0)"},      // Calm - transparent
+			{Value: 1, Color: "rgba(230,247,255,0.1)"},    // Light air - très peu visible
+			{Value: 2, Color: "rgba(179,229,255,0.3)"},    // Light breeze - légèrement visible
+			{Value: 3, Color: "rgba(128,212,255,0.5)"},    // Gentle breeze - semi-transparent
+			{Value: 5, Color: "rgba(77,195,255,0.7)"},     // Moderate breeze - plus visible
+			{Value: 7, Color: "#1AB2FF"},                  // Fresh breeze - bleu vif opaque
+			{Value: 10, Color: "#00A0E6"},                 // Strong breeze - bleu intense
+			{Value: 12, Color: "#0080B3"},                 // Near gale - bleu foncé
+			{Value: 15, Color: "#66CC66"},                 // Moderate gale - vert (comme Windy)
+			{Value: 18, Color: "#99DD00"},                 // Fresh gale - vert clair
+			{Value: 20, Color: "#FFCC00"},                 // Strong gale - jaune
+			{Value: 25, Color: "#FF9900"},                 // Storm - orange
+			{Value: 30, Color: "#FF6600"},                 // Violent storm - rouge-orange
+			{Value: 35, Color: "#FF3300"},                 // Hurricane - rouge vif
+			{Value: 40, Color: "#CC0000"},                 // Hurricane force - rouge foncé
+			{Value: 50, Color: "#990066"},                 // Extreme - violet
+		},
+	},
 	"rainfall_accumulation": {
 		Name:        "rainfall",
 		Icon:        "rainfall.svg",
@@ -170,7 +194,7 @@ var palettes = map[string]Palette{
 		Unit:        "%",
 		ShowPalette: false,
 		Colors:      []ColorPoint{
-			{Value: 0, Color: "rgba(255,255,255, 0)"},
+			{Value: 0, Color: "rgba(255,255,255, 0.01)"},
 			{Value: 1, Color: "rgba(255,255,255, 0.01)"},
 			{Value: 5, Color: "rgba(255,255,255, 0.02)"},
 			{Value: 10, Color: "rgba(255,255,255, 0.05)"},

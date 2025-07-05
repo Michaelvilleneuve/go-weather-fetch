@@ -13,6 +13,12 @@ packages:
             type: float
             unit: °C
             description: "Temperature"
+      - name: wind_speed
+        fields:
+          - name: u10
+            type: float
+            unit: m/s
+            description: "Wind speed 10M"
       - name: comfort_index
         fields:
           - name: r2
